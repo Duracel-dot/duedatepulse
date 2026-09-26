@@ -179,6 +179,10 @@ Les écrans complets avec l'interface (HUD, rail, console N1, inspecteur, mur 2�
 - Tour 1 : [expert supervision](conseil/1-expert-supervision-tour1.md) · [designer UI/UX](conseil/2-designer-uiux-tour1.md) · [directeur artistique](conseil/3-directeur-artistique-tour1.md)
 - Tour 2 : [expert supervision](conseil/4-expert-supervision-tour2.md) · [designer UI/UX](conseil/5-designer-uiux-tour2.md) · [directeur artistique](conseil/6-directeur-artistique-tour2.md)
 
+Un second conseil, réunissant trois experts de la production (système, réseau, applicatif), a arrêté la
+grammaire de l'état global de la console « tout en 3D » : [CONSEIL-PRODUCTION.md](CONSEIL-PRODUCTION.md),
+comptes rendus dans [`conseil-production/`](conseil-production/).
+
 ## 10. Démo interactive
 
 Une démo jouable du nouveau front est servie par l'application. Lancer `SupervisionNG.cmd` (mode démonstration tant que `config\supervisionng.json` n'existe pas) ou `npm run demo`, puis ouvrir `http://localhost:8080/refonte/`. Elle fonctionne hors ligne.
@@ -193,3 +197,20 @@ Elle rejoue le scénario `esx-par-08` sur les données du monde de démonstratio
 - le mode mur.
 
 Ses données sont figées : elle ne lit pas encore le flux temps réel du serveur.
+
+### Démo spatiale : tout dans la scène 3D
+
+`http://localhost:8080/refonte/spatial/` répond à la demande « tout navigable sans interface en avant ».
+La page ne contient que la scène.
+
+- **Strates superposées.** Physique au sol, puis réseau, virtualisation et services. Chaque élément logique
+  est à l'aplomb de son ancrage physique : une verticale est une chaîne de dépendances.
+- **Tout est un objet de la scène.** Le tableau des pannes est un totem posé dans la salle. Les détails
+  s'ouvrent dans des cartels ancrés aux objets. La règle du temps est au sol.
+- **Chorégraphie de panne.** Une onde au sol, les strates qui s'écartent, le serveur qui sort de sa baie et
+  un recul de la caméra qui garde toute la salle.
+- **État global** (marge, redondance, inconnu, interventions) : il suit la grammaire du
+  [conseil de production](CONSEIL-PRODUCTION.md).
+
+Seule une légende de coin (heure, âge des données, P1 et P2 non pris) reste fixée à l'écran. C'est une
+exception votée à l'unanimité par ce conseil.

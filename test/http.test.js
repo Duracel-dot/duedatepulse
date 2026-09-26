@@ -128,3 +128,16 @@ test('démo de la refonte servie sur /refonte/ (hors ligne)', async () => {
     await r.arrayBuffer();
   }
 });
+
+test('démo spatiale servie sur /refonte/spatial/ (tout dans la scène 3D)', async () => {
+  const r = await fetch(`${base}/refonte/spatial/`);
+  assert.equal(r.status, 200);
+  const html = await r.text();
+  assert.match(html, /sng:app/);
+  assert.match(html, /\/vendor\/three\/build\/three\.module\.js/, 'three.js local, pas de CDN');
+  for (const p of ['/refonte/js/spatial.js', '/refonte/js/maquette.js', '/refonte/js/grammaire.js', '/refonte/spatial.css']) {
+    const res = await fetch(`${base}${p}`);
+    assert.equal(res.status, 200, p);
+    await res.arrayBuffer();
+  }
+});

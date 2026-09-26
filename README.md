@@ -223,6 +223,11 @@ Une **démo jouable du nouveau front** est servie par l'application, hors ligne 
 (`SupervisionNG.cmd` ou `npm run demo`), puis ouvrir <http://localhost:8080/refonte/>. Elle rejoue un
 incident avec des données figées.
 
+La **démo spatiale** <http://localhost:8080/refonte/spatial/> intègre toute la console dans la scène 3D. Les
+strates physique, réseau, virtualisation et services y sont superposées à l'aplomb les unes des autres. La
+démo applique aussi la grammaire de l'état global (marge, redondance, inconnu, interventions), arrêtée par un
+[conseil d'experts de la production](docs/refonte/CONSEIL-PRODUCTION.md).
+
 ## Licence
 
 MIT — voir [LICENSE](LICENSE).

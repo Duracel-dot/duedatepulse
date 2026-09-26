@@ -3,7 +3,8 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import { OUTPUT, renderModule } from '../scripts/refonte-demo-data.mjs';
-import { stateAt, T0, EVENT_BY_ID } from '../public/refonte/js/data.js';
+import { stateAt, globalAt, T0, EVENT_BY_ID } from '../public/refonte/js/data.js';
+import { CANAUX, RYTHMES, LUMINANCE, CHOREGRAPHIE } from '../public/refonte/js/grammaire.js';
 
 test('world.js est à jour avec le monde de démonstration', () => {
   // fins de ligne normalisées : la CI Windows extrait les fichiers texte en CRLF
@@ -36,4 +37,31 @@ test('scénario : la prise en charge retire l’alarme des compteurs, jamais en 
   assert.equal(stateAt(0, acks).counters[1], 0);
   assert.equal(stateAt(-20, acks).counters[1], 1, 'avant la prise en charge, l’alarme reste ouverte');
   assert.ok(EVENT_BY_ID.get('a04').ack, 'A04 est pris en charge par l’astreinte dans le scénario');
+});
+
+test('grammaire du conseil de production : un canal visuel = un seul sens', () => {
+  assert.equal(new Set(CANAUX.map((c) => c.canal)).size, CANAUX.length, 'canal en double');
+  assert.equal(new Set(CANAUX.map((c) => c.sens)).size, CANAUX.length, 'sens en double');
+  // deux rythmes au plus, de fréquences distinctes : au-delà, l'œil ne sépare plus les sens
+  assert.equal(RYTHMES.length, 2);
+  assert.notEqual(RYTHMES[0].hz, RYTHMES[1].hz);
+  assert.deepEqual(Object.keys(LUMINANCE), ['1', '2'], 'marge consommée : deux paliers de bleu seulement');
+  assert.ok(CHOREGRAPHIE.recadrageApresInactiviteS >= 60, 'la caméra ne bouge jamais sous la main de l’opérateur');
+  assert.ok(CHOREGRAPHIE.tempete.nouvellesCauses <= CHOREGRAPHIE.tempete.agregationAuDela);
+});
+
+test('état global : redondance, marge et inconnu suivent le scénario', () => {
+  const niveaux = new Set(['tenue', 'mince', 'perdue']);
+  for (const t of [T0 - 60, T0 + 10, 0]) {
+    const g = globalAt(t);
+    for (const r of g.redondance) assert.ok(niveaux.has(r.niveau), `${r.id} : ${r.niveau}`);
+    for (const m of g.marge) assert.ok(m.niveau === 1 || m.niveau === 2, `${m.id} : palier ${m.niveau}`);
+    assert.ok(g.horsRegime.length <= 8, 'huit défilements au plus');
+  }
+  const cl = (t) => globalAt(t).redondance.find((r) => r.id === 'CL-PROD-PAR').niveau;
+  assert.equal(cl(T0 - 60), 'tenue');
+  assert.equal(cl(0), 'perdue', 'réserve N+1 consommée par la reprise HA');
+  assert.deepEqual(globalAt(0).perimes, ['lic-par-01']);
+  assert.ok(globalAt(0).marge.some((m) => m.id === 'esx-par-07'), 'contention après la reprise HA');
+  assert.ok(!globalAt(T0 - 60).marge.some((m) => m.id === 'esx-par-07'));
 });

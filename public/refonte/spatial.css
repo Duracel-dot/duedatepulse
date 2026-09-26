@@ -1,0 +1,9 @@
+/* Démo spatiale : la page ne contient que la scène. Thème sombre unique (salle de supervision). */
+:root { color-scheme: dark; --bg: #12161C; --ink: #8A94A0; --ivory: #F5F1E8; }
+html, body { height: 100%; margin: 0; background: var(--bg); overflow: hidden; }
+body { font: 14px 'IBM Plex Sans', 'Segoe UI', system-ui, sans-serif; color: var(--ivory); }
+.spatial { position: fixed; inset: 0; }
+#scene { display: block; width: 100%; height: 100%; outline: none; touch-action: none; cursor: grab; }
+#scene:focus-visible { box-shadow: inset 0 0 0 2px var(--ivory); }
+.sr-only { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+.fallback { position: absolute; inset: 0; display: grid; place-items: center; margin: 0; padding: 24px; color: var(--ink); text-align: center; }

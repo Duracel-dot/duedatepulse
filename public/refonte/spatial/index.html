@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>SupervisionNG Spatial</title>
+<meta name="sng-three" content="/vendor/three/build/three.module.js">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="../fonts/plex.css">
+<link rel="stylesheet" href="../spatial.css">
+</head>
+<body>
+<!-- sng:app -->
+<main class="spatial" id="spatial">
+  <canvas id="scene" tabindex="0" aria-label="Console de supervision spatiale de la salle A, Paris DC1. Tabulation : parcourir les événements. Entrée : ouvrir. A : prendre en charge. Point d'interrogation : aide." aria-describedby="a11y-help"></canvas>
+  <p id="a11y-help" class="sr-only">Toute l'interface est dans la scène : strates physique, réseau, virtualisation et services superposées, tableau des événements au fond de la salle, règle du temps au sol. Raccourcis : 1 à 4 isolent une strate, 0 les montre toutes, barre oblique pour chercher, R rejoue l'incident, Échap revient à la vue globale.</p>
+  <div id="a11y-live" class="sr-only" aria-live="polite"></div>
+  <p id="fallback" class="fallback" hidden></p>
+</main>
+<!-- /sng:app -->
+<script type="module" src="../js/spatial.js"></script>
+</body>
+</html>

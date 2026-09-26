@@ -241,3 +241,47 @@ export function fmtClock(t, withSeconds = true) {
 export function fmtDay(t) {
   return new Date(BASE + t * 1000).toLocaleDateString('fr-FR', { weekday: 'short', day: '2-digit', month: '2-digit' });
 }
+
+// ---------------------------------------------------------------- état global (au-dessus des pannes)
+// Signaux retenus par le conseil de production (docs/refonte/CONSEIL-PRODUCTION.md) : ce ne sont pas des
+// pannes mais des marges qui s'usent. Chaque signal a sa propre variable visuelle dans la démo spatiale.
+
+/**
+ * Signaux d'état global à l'instant t.
+ * - redondance : 'tenue' | 'mince' | 'perdue' (la prochaine panne banale devient une crise)
+ * - marge : niveau 1 (mince) ou 2 (proche de la limite) pour la capacité, le thermique, la contention
+ * - changements : interventions en cours (planifiées ou non), avec leur avancement
+ * - budget : vitesse de consommation du budget d'erreur d'un service (1 = rythme prévu)
+ * - horsRegime : trafic inhabituel sur un lien (secours actif, flux hors fenêtre)
+ * - perimes : objets sans donnée depuis plus de 3 intervalles
+ */
+export function globalAt(t) {
+  const afterHA = t >= T0 + 50;
+  const inc = t >= T0;
+  const redondance = [
+    { id: 'CL-PROD-PAR', niveau: t >= T0 + 30 ? 'perdue' : 'tenue', detail: t >= T0 + 30 ? '9/10 hôtes : une panne de plus ne passe pas' : 'N+1 disponible' },
+    { id: 'transit', niveau: 'mince', detail: 'transit 1 à 81 % au p95 : la paire tient à peine la perte d’un lien' },
+    { id: 'ups-par-2', niveau: 'mince', detail: 'voie B à 43 % (2N : 40 % au plus)' },
+    ...['svc:portail', 'svc:rds', 'svc:k8s'].map((id) => ({ id, niveau: inc ? 'perdue' : 'tenue', detail: inc ? (afterHA ? 'toutes les instances servent, sur un cluster sans réserve' : 'une instance perdue, N+1 tenu') : 'N+1' })),
+  ];
+  const marge = [
+    { id: 'stor-par-1', niveau: 1, detail: 'vm_nfs01 plein dans 24 j (projection 30 j)' },
+    { id: 'A05', niveau: 1, detail: 'T° d’entrée 25,8 °C (confort < 25 °C)' },
+    { id: 'A04', niveau: 2, detail: 'T° d’entrée 28,4 °C' },
+    ...(afterHA ? [{ id: 'esx-par-07', niveau: 1, detail: 'CPU ready 7 % depuis la reprise HA' }] : []),
+    { id: 'rtr-par-1', niveau: 2, detail: 'transit 1 au p95 81 % sur 24 h' },
+  ];
+  const changements = [
+    { id: 'bkp-par-01', planifie: true, avancement: null, detail: 'maintenance Veeam jusqu’à 18:00' },
+    { id: 'svc:portail', planifie: true, avancement: 0.6, detail: 'CHG-2291 · portail v2.15 · 6/10 instances mises à jour' },
+  ];
+  const budget = [
+    { id: 'svc:rds', vitesse: t >= T0 + 60 ? 6.8 : 0.9, detail: 'budget d’erreur consommé 6,8× plus vite que prévu (latence de connexion)' },
+    { id: 'svc:crm', vitesse: inc ? 100 : 1, detail: 'service interrompu' },
+  ];
+  const horsRegime = [
+    { id: 'A08', debut: -240, detail: 'flux de sauvegarde hors fenêtre : 3,1 Gb/s vers bkp-par-01' },
+  ];
+  const perimes = t >= -900 ? ['lic-par-01'] : [];
+  return { redondance, marge, changements, budget, horsRegime, perimes };
+}
