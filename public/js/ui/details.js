@@ -211,7 +211,7 @@ export class DetailsPanel {
       }).join('')}</div></div>`);
     }
 
-    parts.push(`<div class="d-sec"><h4>Sources</h4><div class="srcs">${(e.sources || []).map((s) => `<span>${esc(s)}</span>`).join('')}</div>${e.updatedAt ? `<div class="muted" style="margin-top:6px;font-size:11px">Mis à jour : ${dateTime(e.updatedAt)}</div>` : ''}</div>`);
+    parts.push(`<div class="d-sec"><h4>Sources</h4><div class="srcs">${(e.sources || []).map((s) => `<span>${esc(s)}</span>`).join('')}</div>${e.updatedAt ? `<div class="muted" style="margin-top:6px;font-size:11px">Dernière modification : ${dateTime(e.updatedAt)}</div>` : ''}</div>`);
     parts.push(`<div class="d-actions"><button class="btn" data-act="focus">Centrer (F)</button><button class="btn" data-act="isolate">${this.view.isolate ? 'Tout afficher' : 'Isoler'} (I)</button></div>`);
     return parts.join('');
   }

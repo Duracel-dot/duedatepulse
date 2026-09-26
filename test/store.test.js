@@ -145,6 +145,12 @@ test('deltas : seules les entites modifiees sont emises, suppression signalee', 
   assert.equal(deltas[1].entities.set[0].name, 'y2');
   assert.deepEqual(deltas[2].entities.del, ['y']);
   assert.equal(deltas[2].version, 3);
+  // republication identique plus tard : aucun delta
+  s.publish('a', { entities: [{ id: 'x', type: 'vm', name: 'x' }] });
+  clearTimeout(s.rebuildTimer);
+  s.rebuildTimer = null;
+  s.rebuild(Date.now() + 60000);
+  assert.equal(deltas.length, 3);
 });
 
 test('acquittement d\'alarme', () => {

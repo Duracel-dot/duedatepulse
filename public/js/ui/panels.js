@@ -133,7 +133,6 @@ export class UI {
       if (row.dataset.link) this.selectLink(row.dataset.link);
       else this.select(row.dataset.entity, { fly: true });
     });
-    this.$('#tab-collectors').addEventListener('click', () => {});
     setInterval(() => { this.renderAlarms(); this.renderCollectors(); }, 15000);
   }
 
@@ -195,7 +194,6 @@ export class UI {
     const counts = {};
     for (const e of this.model.entities.values()) counts[e.layer] = (counts[e.layer] || 0) + 1;
     counts.flow = this.model.flows.size;
-    counts.network = (counts.network || 0);
     for (const row of document.querySelectorAll('#layers .toggle')) {
       const n = counts[row.dataset.layer];
       row.querySelector('.n').textContent = n ? n : '';
@@ -210,9 +208,6 @@ export class UI {
     if (flags.alarms || flags.structure) this.renderAlarms();
     if (flags.collectors) this.renderCollectors();
     if (this.details.current) this.details.refresh();
-    if (this.view.selectedFlow && !this.model.flows.has(this.view.selectedFlow)) {
-      /* le flux a disparu : on garde l'affichage du chemin tel quel */
-    }
     if (this.pendingSelect && this.model.get(this.pendingSelect)) {
       const id = this.pendingSelect;
       this.pendingSelect = null;

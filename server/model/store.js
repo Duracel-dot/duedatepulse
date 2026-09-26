@@ -630,7 +630,9 @@ function diffMap(prev, next) {
   const seen = new Set();
   for (const [id, obj] of next) {
     seen.add(id);
-    const json = JSON.stringify(obj);
+    // l'horodatage seul ne justifie pas un envoi (une source qui republie a l'identique)
+    const { updatedAt, ...rest } = obj;
+    const json = JSON.stringify(rest);
     if (prev.get(id) !== json) { set.push(obj); prev.set(id, json); }
   }
   for (const id of [...prev.keys()]) {
