@@ -1,6 +1,8 @@
 /* Démo spatiale : la page ne contient que la scène. Thème sombre unique (salle de supervision). */
 :root { color-scheme: dark; --bg: #12161C; --ink: #8A94A0; --ivory: #F5F1E8; }
 html, body { height: 100%; margin: 0; background: var(--bg); overflow: hidden; }
+/* salle de projection : halo doux derrière la maquette, bords assombris */
+.spatial { background: radial-gradient(120% 95% at 52% 42%, #1C222B 0%, #151A21 48%, #0D1014 100%); }
 body { font: 14px 'IBM Plex Sans', 'Segoe UI', system-ui, sans-serif; color: var(--ivory); }
 .spatial { position: fixed; inset: 0; }
 #scene { display: block; width: 100%; height: 100%; outline: none; touch-action: none; cursor: grab; }

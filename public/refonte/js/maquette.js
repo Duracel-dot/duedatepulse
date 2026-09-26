@@ -8,11 +8,15 @@ export const INNER_W = 0.482;                // largeur utile 19"
 export const ROW_A_FRONT = 0;                // face avant de la rangée A, tournée vers la caméra (+z)
 export const ROW_B_FRONT = -3.6;             // face avant de la rangée B, tournée vers -z
 
-/** Construit la maquette. Retourne le groupe `world` et les index des objets sélectionnables. */
-export function buildMaquette(THREE) {
+/**
+ * Construit la maquette. Retourne le groupe `world` et les index des objets sélectionnables.
+ * `shadows` : les volumes physiques portent et reçoivent les ombres (la démo spatiale les active).
+ */
+export function buildMaquette(THREE, { shadows = false } = {}) {
   // ------------------------------------------------------------ utilitaires
   const texCache = new Map();
-  const mat = (color, o = {}) => new THREE.MeshStandardMaterial({ color, roughness: 0.92, metalness: 0.04, ...o });
+  const mat = (color, o = {}) => new THREE.MeshStandardMaterial({ color, roughness: 0.86, metalness: 0.05, ...o });
+  const solid = (o, cast = true, receive = true) => { if (shadows) { o.castShadow = cast; o.receiveShadow = receive; } return o; };
   const lineMat = (color, opacity = 1) => new THREE.LineBasicMaterial({ color, transparent: opacity < 1, opacity });
   const edges = (geo, color, opacity = 1) => new THREE.LineSegments(new THREE.EdgesGeometry(geo), lineMat(color, opacity));
   const box = (w, h, d, material) => new THREE.Mesh(new THREE.BoxGeometry(w, h, d), material);
@@ -53,7 +57,7 @@ export function buildMaquette(THREE) {
 
   // ------------------------------------------------------------ façades procédurales
   // Représentation schématique : seuls les équipements inventoriés sont dessinés.
-  const FP = { body: '#323840', net: '#2E343C', stor: '#343A42', edge: '#15191E', ear: '#252A31', screw: '#48505A', vent: '#23282E', drive: '#3D444D', driveEdge: '#22272D', handle: '#5A636E', port: '#0F1114', portEdge: '#4C5560', led: '#5C646E', act: '#6D7580', lcd: '#1D2632' };
+  const FP = { body: '#4A525C', net: '#454D57', stor: '#4C545E', edge: '#1A1E23', ear: '#363C44', screw: '#66707B', vent: '#333941', drive: '#5A636D', driveEdge: '#2E343B', handle: '#7E8894', port: '#131619', portEdge: '#66707B', led: '#808A96', act: '#8A94A0', lcd: '#243344' };
   const PX = 1100; // pixels par mètre
   function faceplate(type, hU) {
     const W = Math.round(INNER_W * PX); const H = Math.max(24, Math.round(hU * U * PX));
@@ -110,9 +114,9 @@ export function buildMaquette(THREE) {
   function blankTex(hU) {
     const W = Math.round(INNER_W * PX); const H = Math.round(hU * U * PX);
     return canvasTex(`blank-${hU}`, W, Math.max(8, H), (g) => {
-      g.fillStyle = '#262B31'; g.fillRect(0, 0, W, H);
-      g.fillStyle = '#1D2126'; for (let k = 1; k < hU; k++) g.fillRect(0, Math.round(k * (H / hU)) - 1, W, 2);
-      g.fillStyle = '#2C3238'; for (let k = 0; k < hU; k++) { const y = (k + 0.5) * (H / hU); g.fillRect(6, y - 2, 4, 4); g.fillRect(W - 10, y - 2, 4, 4); }
+      g.fillStyle = '#343A42'; g.fillRect(0, 0, W, H);
+      g.fillStyle = '#262B31'; for (let k = 1; k < hU; k++) g.fillRect(0, Math.round(k * (H / hU)) - 1, W, 2);
+      g.fillStyle = '#434A53'; for (let k = 0; k < hU; k++) { const y = (k + 0.5) * (H / hU); g.fillRect(6, y - 2, 4, 4); g.fillRect(W - 10, y - 2, 4, 4); }
     });
   }
   const hatchTex = canvasTex('hatch', 64, 64, (g) => {
@@ -121,12 +125,22 @@ export function buildMaquette(THREE) {
     for (let i = -64; i < 128; i += 12) { g.beginPath(); g.moveTo(i, 64); g.lineTo(i + 64, 0); g.stroke(); }
   }, { repeat: true });
   const perfTex = canvasTex('perf', 64, 64, (g) => {
-    g.fillStyle = '#1B2026'; g.fillRect(0, 0, 64, 64);
-    g.fillStyle = '#151A1F'; for (let y = 4; y < 64; y += 8) for (let x = 4; x < 64; x += 8) g.fillRect(x, y, 3, 3);
+    g.fillStyle = '#20262D'; g.fillRect(0, 0, 64, 64);
+    g.fillStyle = '#161A1F'; for (let y = 4; y < 64; y += 8) for (let x = 4; x < 64; x += 8) g.fillRect(x, y, 3, 3);
   }, { repeat: true });
   const sidePerfTex = canvasTex('sideperf', 64, 64, (g) => {
-    g.fillStyle = '#252B32'; g.fillRect(0, 0, 64, 64);
-    g.fillStyle = '#1D2228'; for (let y = 3; y < 64; y += 6) for (let x = 3; x < 64; x += 6) g.fillRect(x, y, 2, 2);
+    g.fillStyle = '#2E343C'; g.fillRect(0, 0, 64, 64);
+    g.fillStyle = '#252A31'; for (let y = 3; y < 64; y += 6) for (let x = 3; x < 64; x += 6) g.fillRect(x, y, 2, 2);
+  }, { repeat: true });
+  // dalles de faux plancher 0,6 m : joints sombres, légère variation de teinte d'une dalle à l'autre
+  const tileTex = canvasTex('tiles', 512, 512, (g) => {
+    const n = 4; const s = 512 / n;
+    for (let i = 0; i < n; i++) for (let j = 0; j < n; j++) {
+      const v = 27 + ((i * 7 + j * 13) % 5) - 2;
+      g.fillStyle = `rgb(${v - 3},${v},${v + 5})`; g.fillRect(i * s, j * s, s, s);
+      g.fillStyle = 'rgba(255,255,255,0.025)'; g.fillRect(i * s + 3, j * s + 3, s - 6, 2);
+    }
+    g.fillStyle = '#14181D'; for (let k = 0; k <= n; k++) { g.fillRect(k * s - 2, 0, 4, 512); g.fillRect(0, k * s - 2, 512, 4); }
   }, { repeat: true });
   const glowTex = canvasTex('glow', 128, 128, (g) => {
     const gr = g.createRadialGradient(64, 64, 4, 64, 64, 62);
@@ -141,48 +155,58 @@ export function buildMaquette(THREE) {
 
   // ------------------------------------------------------------ salle
   const world = new THREE.Group();
-  const room = { x0: -2.4, x1: 7.4, z0: -6.4, z1: 3.0 };
-  const floor = new THREE.Mesh(new THREE.PlaneGeometry(room.x1 - room.x0, room.z1 - room.z0), mat('#171B21'));
+  const room = { x0: -2.7, x1: 6.5, z0: -5.7, z1: 2.3 };
+  const floorTex = tileTex.clone(); floorTex.needsUpdate = true;
+  floorTex.repeat.set((room.x1 - room.x0) / 2.4, (room.z1 - room.z0) / 2.4);
+  floorTex.offset.set(-room.x0 / 2.4, 0);
+  const floor = solid(new THREE.Mesh(new THREE.PlaneGeometry(room.x1 - room.x0, room.z1 - room.z0), mat('#FFFFFF', { map: floorTex, roughness: 0.95 })), false, true);
   floor.rotation.x = -Math.PI / 2;
   floor.position.set((room.x0 + room.x1) / 2, 0, (room.z0 + room.z1) / 2);
   world.add(floor);
-  // dalles de faux plancher 0,6 m, perforées dans les allées froides
-  const grid = [];
-  for (let x = room.x0; x <= room.x1 + 1e-6; x += 0.6) grid.push(x, 0.002, room.z0, x, 0.002, room.z1);
-  for (let z = room.z0; z <= room.z1 + 1e-6; z += 0.6) grid.push(room.x0, 0.002, z, room.x1, 0.002, z);
-  const gridGeo = new THREE.BufferGeometry();
-  gridGeo.setAttribute('position', new THREE.Float32BufferAttribute(grid, 3));
-  world.add(new THREE.LineSegments(gridGeo, lineMat('#232830')));
+  // socle de maquette : la salle est posée sur une dalle coupée, tranche sombre et arête claire
+  {
+    const SL = { x0: room.x0 - 0.22, x1: room.x1 + 0.42, z0: room.z0 - 0.42, z1: room.z1 + 0.22, h: 0.34 };
+    const slabSide = new THREE.MeshStandardMaterial({ color: '#15191E', roughness: 0.95 });
+    const slabTop = new THREE.MeshStandardMaterial({ color: '#1D2229', roughness: 0.95 });
+    const slab = new THREE.Mesh(new THREE.BoxGeometry(SL.x1 - SL.x0, SL.h, SL.z1 - SL.z0), [slabSide, slabSide, slabTop, slabSide, slabSide, slabSide]);
+    slab.position.set((SL.x0 + SL.x1) / 2, -SL.h / 2 - 0.002, (SL.z0 + SL.z1) / 2); solid(slab, false, true); world.add(slab);
+    world.add(at(edges(slab.geometry, '#4A535E', 0.9), slab.position));
+    // arête supérieure avant soulignée : la lumière accroche la tranche comme sur une maquette d'architecte
+    const lip = new THREE.Mesh(new THREE.BoxGeometry(SL.x1 - SL.x0, 0.012, 0.012), new THREE.MeshBasicMaterial({ color: '#6B7480' }));
+    lip.position.set((SL.x0 + SL.x1) / 2, -0.004, SL.z1); world.add(lip);
+    const lip2 = new THREE.Mesh(new THREE.BoxGeometry(0.012, 0.012, SL.z1 - SL.z0), new THREE.MeshBasicMaterial({ color: '#58616C' }));
+    lip2.position.set(SL.x0, -0.004, (SL.z0 + SL.z1) / 2); world.add(lip2);
+  }
   for (const z of [0, -4.8]) {
     const perfMat = new THREE.MeshStandardMaterial({ map: perfTex.clone(), roughness: 1 });
     perfMat.map.repeat.set(8 * 2, 2 * 2); perfMat.map.needsUpdate = true;
-    const p = new THREE.Mesh(new THREE.PlaneGeometry(4.8, 1.2), perfMat);
+    const p = solid(new THREE.Mesh(new THREE.PlaneGeometry(4.8, 1.2), perfMat), false, true);
     p.rotation.x = -Math.PI / 2; p.position.set(2.1, 0.003, z + 0.6); world.add(p);
   }
   // murs coupés à 1,4 m (poché noir sur la tranche)
   const WALL_H = 1.4; const WALL_T = 0.2;
-  const wallMat = mat('#232830');
+  const wallMat = mat('#2A3038');
   const wallTop = new THREE.MeshBasicMaterial({ color: '#07090B' });
   const wallBack = box(room.x1 - room.x0 + WALL_T, WALL_H, WALL_T, [wallMat, wallMat, wallTop, wallMat, wallMat, wallMat]);
-  wallBack.position.set((room.x0 + room.x1) / 2 + WALL_T / 2, WALL_H / 2, room.z0 - WALL_T / 2); world.add(wallBack);
+  wallBack.position.set((room.x0 + room.x1) / 2 + WALL_T / 2, WALL_H / 2, room.z0 - WALL_T / 2); world.add(solid(wallBack));
   world.add(at(edges(wallBack.geometry, '#8D949C', 0.45), wallBack.position));
   const wallRight = box(WALL_T, WALL_H, room.z1 - room.z0, [wallMat, wallMat, wallTop, wallMat, wallMat, wallMat]);
-  wallRight.position.set(room.x1 + WALL_T / 2, WALL_H / 2, (room.z0 + room.z1) / 2); world.add(wallRight);
+  wallRight.position.set(room.x1 + WALL_T / 2, WALL_H / 2, (room.z0 + room.z1) / 2); world.add(solid(wallRight));
   world.add(at(edges(wallRight.geometry, '#8D949C', 0.45), wallRight.position));
 
   // climatiseurs contre le mur droit
   for (const [i, z] of [[1, -1.5], [2, -4.5]]) {
     const g = new THREE.Group();
-    const bodyMat = mat('#262C33');
+    const bodyMat = mat('#2E343C');
     const front = new THREE.MeshStandardMaterial({ map: canvasTex(`crac-${i}`, 256, 512, (c, w, h) => {
-      c.fillStyle = '#262C33'; c.fillRect(0, 0, w, h);
-      c.fillStyle = '#1C2126'; for (let y = 60; y < h - 20; y += 10) c.fillRect(20, y, w - 40, 5);
+      c.fillStyle = '#2E343C'; c.fillRect(0, 0, w, h);
+      c.fillStyle = '#21262C'; for (let y = 60; y < h - 20; y += 10) c.fillRect(20, y, w - 40, 5);
       c.fillStyle = '#1D2632'; c.fillRect(w - 80, 18, 56, 28);
       c.fillStyle = '#8A94A0'; c.font = "600 16px 'IBM Plex Mono', monospace"; c.fillText('18,4°', w - 74, 38);
     }), roughness: 0.95 });
     const b = box(0.9, 1.95, 1.8, [bodyMat, front, bodyMat, bodyMat, bodyMat, bodyMat]);
-    b.position.y = 0.975; g.add(b);
-    g.add(at(edges(b.geometry, '#3B434E'), b.position));
+    b.position.y = 0.975; g.add(solid(b));
+    g.add(at(edges(b.geometry, '#56606B', 0.9), b.position));
     const lab = textPlane(`CLIM ${i}`, { size: 0.16, color: '#8A94A0', spacing: 6 });
     lab.rotation.x = -Math.PI / 2; lab.position.set(-0.36, 1.952, 0.2); g.add(lab);
     g.position.set(room.x1 - 0.55, 0, z + 0.9); world.add(g);
@@ -190,16 +214,16 @@ export function buildMaquette(THREE) {
 
   // titre de salle au sol, façon cartouche d'architecte
   const title = textPlane('SALLE A — PRODUCTION', { size: 0.34, color: '#8A94A0', spacing: 18 });
-  title.rotation.x = -Math.PI / 2; title.position.set(-1.9, 0.004, 1.95); world.add(title);
+  title.rotation.x = -Math.PI / 2; title.position.set(-1.9, 0.004, room.z1 - 0.75); world.add(title);
   const sub = textPlane('PARIS DC1 · NIVEAU −1 · 16 BAIES · 42U', { size: 0.17, color: '#5A636E', font: "500 64px 'IBM Plex Mono', monospace", spacing: 6 });
-  sub.rotation.x = -Math.PI / 2; sub.position.set(-1.9, 0.004, 2.35); world.add(sub);
+  sub.rotation.x = -Math.PI / 2; sub.position.set(-1.9, 0.004, room.z1 - 0.35); world.add(sub);
 
   // ------------------------------------------------------------ baies et équipements
   const pickables = [];
   const deviceMeshes = new Map();   // id -> { mesh, material, rack, anchor }
   const racks = new Map();          // id -> { group, outline, uband, anchor, devices }
-  const rackBody = mat('#252B32');
-  const rackTop = mat('#2F363F');
+  const rackBody = mat('#2A3038');
+  const rackTop = mat('#3B424B');
   const rackSide = new THREE.MeshStandardMaterial({ map: sidePerfTex, roughness: 0.95 });
   sidePerfTex.repeat.set(6, 20);
   const rackInside = new THREE.MeshBasicMaterial({ color: '#0A0C0F' });
@@ -214,9 +238,9 @@ export function buildMaquette(THREE) {
       const body = box(RACK.w, RACK.h, RACK.d, [rackSide, rackSide, rackTop, rackBody, rackBody, rackInside]);
       body.position.set(0, RACK.h / 2, RACK.d / 2);
       body.userData = { id: rack.id };
-      g.add(body);
+      g.add(solid(body));
       pickables.push(body);
-      const outline = at(edges(body.geometry, '#3B434E'), body.position);
+      const outline = at(edges(body.geometry, '#5E6873', 0.95), body.position);
       g.add(outline);
       // montants avant
       for (const sx of [-1, 1]) {
@@ -233,7 +257,7 @@ export function buildMaquette(THREE) {
         const m = new THREE.MeshStandardMaterial({ map: faceplate(d.type, h), roughness: 0.85, metalness: 0.05, emissive: new THREE.Color(0x000000) });
         const mesh = box(INNER_W + 0.036, h * U - 0.003, 0.03, [m, m, m, m, m, m]);
         // la texture n'est utile que sur la face avant (index 5 regarde +z, 4 regarde -z)
-        const side = new THREE.MeshStandardMaterial({ color: '#2B3139', roughness: 0.9 });
+        const side = new THREE.MeshStandardMaterial({ color: '#30363E', roughness: 0.9 });
         mesh.material = [side, side, side, side, side, m];
         const y = RACK.plinth + (d.u - 1) * U + (h * U) / 2;
         mesh.position.set(0, y, -0.012);
@@ -299,9 +323,9 @@ export function buildMaquette(THREE) {
   hotLab.rotation.y = -Math.PI / 2; hotLab.position.set(-RACK.w / 2 - 0.01, 1.25, hotZ0 + 0.12); world.add(hotLab);
   // chemins de câbles au-dessus des rangées
   for (const z of [ROW_A_FRONT - 0.35, ROW_B_FRONT + 0.35]) {
-    const tray = box(hotLen + 0.4, 0.06, 0.3, mat('#20252C'));
-    tray.position.set(hotLen / 2 - RACK.w / 2, RACK.h + 0.32, z); world.add(tray);
-    world.add(at(edges(tray.geometry, '#3B434E'), tray.position));
+    const tray = box(hotLen + 0.4, 0.06, 0.3, mat('#262C33'));
+    tray.position.set(hotLen / 2 - RACK.w / 2, RACK.h + 0.32, z); world.add(solid(tray, true, false));
+    world.add(at(edges(tray.geometry, '#4A535E'), tray.position));
   }
 
   function rackWorldPos(rackId) {
