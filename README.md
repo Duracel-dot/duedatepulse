@@ -204,6 +204,19 @@ La CI GitHub Actions exécute les tests sous **Windows et Linux** (Node 20 et 22
 scripts PowerShell réels sous Windows PowerShell 5.1, puis construit et vérifie le paquet
 Windows autonome (artefact téléchargeable).
 
+## Prochaine grande refonte
+
+La direction de la prochaine refonte est décrite dans [docs/refonte/](docs/refonte/README.md). Elle a été
+arrêtée par un conseil réunissant un expert en supervision, un designer UI/UX et un directeur artistique :
+
+- la piste visuelle « Maquette & calques » ;
+- une interface ramenée à environ 9 % de l'écran ;
+- des vues physique et logiques ;
+- un stockage de métrologie sur 13 mois ;
+- une feuille de route en deux refontes.
+
+Le dossier contient aussi les maquettes et les comptes rendus complets du conseil.
+
 ## Licence
 
 MIT — voir [LICENSE](LICENSE).
