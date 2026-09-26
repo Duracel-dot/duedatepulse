@@ -1,0 +1,96 @@
+// SupervisionNG - configuration (format JSON avec commentaires).
+// Copier ce fichier en config/supervisionng.json puis l'adapter.
+// Sans config/supervisionng.json, SupervisionNG demarre en mode demonstration.
+//
+// Secrets : toute valeur de mot de passe / jeton / communaute peut s'ecrire
+//   "env:NOM_VARIABLE"      -> variable d'environnement
+//   "dpapi:AQAAANCMnd8..."  -> chiffre avec scripts\protect-secret.ps1 (Windows DPAPI, machine locale)
+//   "file:C:\\chemin\\secret.txt"
+{
+  "server": {
+    "host": "0.0.0.0",          // 127.0.0.1 = poste local uniquement
+    "port": 8080,
+    "openBrowser": false,       // true : ouvre la vue (Edge en mode application) au demarrage
+    // "https": { "pfx": "config/certificat.pfx", "passphrase": "dpapi:..." },
+    // "auth": { "username": "noc", "password": "dpapi:..." },   // authentification HTTP Basic
+    "ingestToken": "env:SNG_INGEST_TOKEN"   // jeton exige par POST /api/ingest/<source> (sinon : local uniquement)
+  },
+
+  // Inventaire physique : sites, salles, rangees, baies, positions U, cablage, reseaux externes
+  "inventory": "config/inventory.json",
+
+  "collectors": [
+    // --- Systeme Windows (CIM / WinRM) : CPU, memoire, disques, services, connexions TCP ---
+    {
+      "type": "windows", "enabled": true, "interval": 60,
+      "targets": ["localhost"],     // ex. ["localhost", "SRV-AD01", "SRV-FIC01"]
+      "flows": true,                // connexions TCP etablies -> flux (sans volumetrie)
+      "concurrency": 4
+      // "credential": { "username": "DOMAINE\\svc-supervision", "password": "dpapi:..." },
+      // "useSsl": false, "winrmPort": 5985, "diskWarnPct": 90, "serviceExclude": ["gupdate"]
+    },
+
+    // --- Hyper-V (PowerShell / WinRM) : hotes, VM, commutateurs virtuels ---
+    {
+      "type": "hyperv", "enabled": false, "interval": 60,
+      "hosts": ["HV01", "HV02", "HV03"]
+      // "credential": { "username": "DOMAINE\\svc-supervision", "password": "dpapi:..." }
+    },
+
+    // --- VMware vCenter (API REST vSphere 7+ ; metriques via VI/JSON 8.0U1+) ---
+    {
+      "type": "vsphere", "name": "vcenter", "enabled": false, "interval": 60,
+      "url": "https://vcenter.domaine.local",
+      "username": "supervision@vsphere.local",
+      "password": "env:SNG_VCENTER_PASSWORD",
+      "insecure": false             // true : certificat auto-signe accepte (ou "ca": "config/ca.pem")
+    },
+
+    // --- Proxmox VE (jeton d'API, role PVEAuditor) ---
+    {
+      "type": "proxmox", "name": "proxmox", "enabled": false, "interval": 30,
+      "url": "https://pve1.domaine.local:8006",
+      "tokenId": "supervision@pve!sng",
+      "tokenSecret": "env:SNG_PROXMOX_TOKEN",
+      "insecure": true
+    },
+
+    // --- Reseau SNMP : interfaces, debits, voisins LLDP (cablage automatique) ---
+    {
+      "type": "snmp", "enabled": false, "interval": 60,
+      "defaults": { "version": "2c", "community": "env:SNG_SNMP_COMMUNITY" },
+      "targets": [
+        "10.0.0.1",
+        { "host": "10.0.0.2", "name": "CORE-2", "type": "switch" },
+        { "host": "10.0.0.254", "type": "firewall", "version": "3", "user": "supervision",
+          "authProtocol": "sha", "authKey": "dpapi:...", "privProtocol": "aes", "privKey": "dpapi:..." }
+      ]
+    },
+
+    // --- Flux : recepteur NetFlow v5 / v9 / IPFIX (exporter depuis les routeurs, pare-feu, switches) ---
+    { "type": "netflow", "enabled": false, "port": 2055, "interval": 10, "window": 60, "maxFlows": 500 },
+
+    // --- Disponibilite ICMP de tous les equipements connus ayant une adresse IP ---
+    { "type": "ping", "enabled": true, "interval": 30, "concurrency": 32, "timeoutMs": 1000 }
+  ],
+
+  // Seuils d'alerte (valeurs par defaut ci-dessous) ; "byType" pour affiner par type d'entite
+  "thresholds": {
+    "cpu":  { "warning": 85, "critical": 95 },
+    "mem":  { "warning": 90, "critical": 97 },
+    "disk": { "warning": 85, "critical": 95 },
+    "byType": {
+      "storage": { "latencyMs": { "warning": 5, "critical": 20 } }
+    }
+  },
+
+  // Reseaux nommes : les flux vers ces plages sont rattaches a une entite externe
+  "networks": [
+    { "cidr": "10.50.0.0/16", "name": "Agence Lyon" },
+    { "cidr": "192.168.100.0/24", "name": "VPN nomades" }
+  ],
+
+  "flows": { "maxFlows": 600 },
+  "log": { "level": "info", "file": "logs/supervisionng.log" },
+  "ui": { "title": "SupervisionNG" }
+}

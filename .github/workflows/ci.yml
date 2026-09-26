@@ -1,0 +1,85 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  test:
+    name: Tests (${{ matrix.os }}, Node ${{ matrix.node }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, ubuntu-latest]
+        node: [20, 22]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+          cache: npm
+      - run: npm ci
+      - run: npm test
+      - name: Demarrage du serveur (demonstration) et verification HTTP
+        shell: bash
+        run: |
+          node server/index.js --demo --port 18080 --no-open > server.log 2>&1 &
+          for i in $(seq 1 30); do curl -sf http://127.0.0.1:18080/api/health && break; sleep 1; done
+          sleep 5
+          curl -sf http://127.0.0.1:18080/api/topology | node -e "let s='';process.stdin.on('data',d=>s+=d).on('end',()=>{const t=JSON.parse(s);console.log('entites',t.entities.length,'liens',t.links.length,'flux',t.flows.length);if(t.entities.length<200||t.flows.length<50)process.exit(1)})"
+          curl -sf http://127.0.0.1:18080/ > /dev/null
+          cat server.log
+
+  windows-powershell:
+    name: Collecteurs Windows reels (PowerShell 5.1)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Collecte CIM locale (windows.ps1) et ping
+        shell: pwsh
+        run: |
+          @'
+          import create from './server/collectors/windows.js';
+          import { createLogger } from './server/util/logger.js';
+          const snaps = [];
+          const c = create({ type: 'windows', targets: ['localhost'], flows: true }, { logger: createLogger('ci'), publish: (id, s) => snaps.push(s) });
+          await c.runOnce();
+          const s = snaps[0];
+          if (!s) { console.error(c.status()); process.exit(1); }
+          const e = s.entities[0];
+          console.log(JSON.stringify({ id: e.id, type: e.type, status: e.status, statusText: e.statusText, metrics: e.metrics, os: e.attrs?.os, flows: s.flows.length }, null, 1));
+          if (e.metrics?.cpu == null || e.metrics?.mem == null) process.exit(1);
+          '@ | Set-Content -Encoding utf8 ci-windows.mjs
+          node ci-windows.mjs
+
+  package:
+    name: Paquet Windows autonome
+    needs: [test, windows-powershell]
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: node scripts/build-release.mjs --with-node
+      - name: Verification du paquet (demarrage avec le node.exe embarque)
+        shell: pwsh
+        run: |
+          $zip = Get-ChildItem dist\*.zip | Select-Object -First 1
+          Expand-Archive $zip.FullName -DestinationPath out
+          $p = Start-Process -FilePath out\SupervisionNG\node\node.exe -ArgumentList 'server\index.js','--demo','--port','18081','--no-open' -WorkingDirectory out\SupervisionNG -PassThru
+          $ok = $false
+          for ($i = 0; $i -lt 30; $i++) { try { Invoke-RestMethod http://127.0.0.1:18081/api/health | Out-Null; $ok = $true; break } catch { Start-Sleep 1 } }
+          Stop-Process -Id $p.Id -Force
+          if (-not $ok) { throw 'le paquet ne demarre pas' }
+      - uses: actions/upload-artifact@v4
+        with:
+          name: SupervisionNG-win-x64
+          path: dist/*.zip

@@ -1,0 +1,99 @@
+{
+  "version": 1,
+  "ps": "5.1.17763.6414",
+  "targets": [
+    {
+      "name": "srv-sql01",
+      "ok": true,
+      "local": false,
+      "cs": {
+        "Name": "SRV-SQL01",
+        "DNSHostName": "srv-sql01",
+        "Domain": "corp.local",
+        "PartOfDomain": true,
+        "Manufacturer": "Dell Inc.",
+        "Model": "PowerEdge R740",
+        "TotalPhysicalMemory": 274810798080,
+        "NumberOfLogicalProcessors": 32
+      },
+      "bios": { "SerialNumber": "7XK2Q53" },
+      "product": { "UUID": "4C4C4544-0058-4B10-8032-B7C04F513533" },
+      "os": {
+        "Caption": "Microsoft Windows Server 2019 Standard",
+        "Version": "10.0.17763",
+        "LastBootUpTime": "\/Date(1757000000000)\/",
+        "FreePhysicalMemory": 53687091,
+        "TotalVisibleMemorySize": 268369920
+      },
+      "uptimeS": 1234567,
+      "cpuLoad": 37,
+      "disks": [
+        { "DeviceID": "C:", "VolumeName": "Système", "Size": 214223253504, "FreeSpace": 96636764160 },
+        { "DeviceID": "D:", "VolumeName": "SQLData", "Size": 1099511627776, "FreeSpace": 54975581388 }
+      ],
+      "nics": [
+        { "Description": "Intel(R) Ethernet 10G 2P X710 Adapter", "MACAddress": "24:6E:96:12:34:56", "IPAddress": "10.10.20.15" },
+        { "Description": "Microsoft Failover Cluster Virtual Adapter", "MACAddress": "02:D0:4B:9A:11:22", "IPAddress": [ "169.254.1.20" ] }
+      ],
+      "stoppedServices": { "Name": "SQLSERVERAGENT", "DisplayName": "SQL Server Agent (MSSQLSERVER)", "State": "Stopped", "ExitCode": 0 },
+      "conns": [
+        { "LocalAddress": "10.10.20.15", "LocalPort": 1433, "RemoteAddress": "10.10.30.21", "RemotePort": 50001, "Process": "sqlservr.exe" },
+        { "LocalAddress": "10.10.20.15", "LocalPort": 1433, "RemoteAddress": "10.10.30.21", "RemotePort": 50002, "Process": "sqlservr.exe" },
+        { "LocalAddress": "::ffff:10.10.20.15", "LocalPort": 1433, "RemoteAddress": "::ffff:10.10.30.21", "RemotePort": 50003, "Process": "sqlservr.exe" },
+        { "LocalAddress": "10.10.20.15", "LocalPort": 3389, "RemoteAddress": "10.10.99.5", "RemotePort": 51000, "Process": "svchost.exe" },
+        { "LocalAddress": "10.10.20.15", "LocalPort": 49700, "RemoteAddress": "10.10.10.10", "RemotePort": 389, "Process": "lsass.exe" },
+        { "LocalAddress": "10.10.20.15", "LocalPort": 49710, "RemoteAddress": "10.10.40.5", "RemotePort": 445, "Process": "System" }
+      ],
+      "listen": [ 135, 445, 1433, 3389, 5985, 49664, 49668 ],
+      "errors": []
+    },
+    {
+      "name": "srv-web01.corp.local",
+      "ok": true,
+      "local": false,
+      "cs": {
+        "Name": "SRV-WEB01",
+        "DNSHostName": "srv-web01",
+        "Domain": "corp.local",
+        "PartOfDomain": true,
+        "Manufacturer": "Microsoft Corporation",
+        "Model": "Virtual Machine",
+        "TotalPhysicalMemory": 8589463552,
+        "NumberOfLogicalProcessors": 4
+      },
+      "bios": { "SerialNumber": "5175-2891-3316-8812-9460-3517-24" },
+      "product": { "UUID": "D5B6F8E2-1C3A-4E5B-9A7D-2F4E6C8A0B1D" },
+      "os": {
+        "Caption": "Microsoft Windows Server 2022 Datacenter",
+        "Version": "10.0.20348",
+        "LastBootUpTime": "2025-09-20T06:12:45.5+02:00",
+        "FreePhysicalMemory": 2097152,
+        "TotalVisibleMemorySize": 8388608
+      },
+      "uptimeS": 518400,
+      "cpuLoad": 12.5,
+      "disks": [
+        { "DeviceID": "C:", "VolumeName": "", "Size": 136365211648, "FreeSpace": 81819126988 }
+      ],
+      "nics": [
+        { "Description": "Microsoft Hyper-V Network Adapter", "MACAddress": "00:15:5D:0A:1B:01", "IPAddress": [ "10.10.30.21" ] }
+      ],
+      "stoppedServices": [],
+      "conns": [
+        { "LocalAddress": "10.10.30.21", "LocalPort": 50001, "RemoteAddress": "10.10.20.15", "RemotePort": 1433, "Process": "w3wp.exe" },
+        { "LocalAddress": "10.10.30.21", "LocalPort": 50002, "RemoteAddress": "10.10.20.15", "RemotePort": 1433, "Process": "w3wp.exe" },
+        { "LocalAddress": "10.10.30.21", "LocalPort": 50003, "RemoteAddress": "10.10.20.15", "RemotePort": 1433, "Process": "w3wp.exe" },
+        { "LocalAddress": "10.10.30.21", "LocalPort": 443, "RemoteAddress": "203.0.113.50", "RemotePort": 61000, "Process": "System" },
+        { "LocalAddress": "10.10.30.21", "LocalPort": 443, "RemoteAddress": "203.0.113.50", "RemotePort": 61001, "Process": "System" },
+        { "LocalAddress": "10.10.30.21", "LocalPort": 443, "RemoteAddress": "198.51.100.7", "RemotePort": 40112, "Process": "System" }
+      ],
+      "listen": [ 80, 443, 3389, 5985 ],
+      "errors": []
+    },
+    {
+      "name": "srv-old01",
+      "ok": false,
+      "error": "WinRM ne peut pas terminer l'opération. Vérifiez que le nom d'ordinateur spécifié est valide."
+    }
+  ]
+}

@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>SupervisionNG</title>
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/css/app.css">
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "/vendor/three/build/three.module.js",
+        "three/addons/": "/vendor/three/addons/"
+      }
+    }
+  </script>
+</head>
+<body>
+  <div id="app">
+    <div id="scene"></div>
+
+    <header id="topbar">
+      <div class="brand">
+        <svg viewBox="0 0 32 32" width="26" height="26" aria-hidden="true"><path d="M16 3 29 10v12L16 29 3 22V10z" fill="none" stroke="currentColor" stroke-width="2"/><path d="M3 10l13 7 13-7M16 17v12" fill="none" stroke="currentColor" stroke-width="2" opacity=".6"/></svg>
+        <span class="brand-name">Supervision<b>NG</b></span>
+        <span id="demo-badge" class="badge badge-demo" hidden>DÉMONSTRATION</span>
+      </div>
+      <div id="health" class="health"></div>
+      <div class="search">
+        <input id="search" type="search" placeholder="Rechercher (nom, IP, hôte…)  [ / ]" autocomplete="off" spellcheck="false">
+        <ul id="search-results" hidden></ul>
+      </div>
+      <div class="top-right">
+        <span id="conn" class="conn" data-state="connecting"><i></i><span>Connexion…</span></span>
+        <span id="clock" class="clock"></span>
+      </div>
+    </header>
+
+    <aside id="left" class="panel">
+      <section>
+        <h3>Couches</h3>
+        <div id="layers" class="toggles"></div>
+      </section>
+      <section>
+        <h3>Coloration</h3>
+        <div id="color-modes" class="seg"></div>
+      </section>
+      <section>
+        <h3>Écartement des couches</h3>
+        <input id="explode" type="range" min="0" max="3" step="0.1" value="1">
+      </section>
+      <section>
+        <h3>Vues</h3>
+        <div class="btn-row">
+          <button data-view="overview" title="Vue d’ensemble (R)">Ensemble</button>
+          <button data-view="top" title="Vue de dessus">Dessus</button>
+          <button data-view="front" title="Vue de face">Face</button>
+          <button data-view="virtual" title="Couche virtuelle">Virtuel</button>
+        </div>
+      </section>
+      <section>
+        <h3>Options</h3>
+        <label class="chk"><input type="checkbox" id="opt-labels" checked> Étiquettes</label>
+        <label class="chk"><input type="checkbox" id="opt-isolate"> Isoler la sélection (I)</label>
+        <label class="chk"><input type="checkbox" id="opt-rotate"> Rotation automatique</label>
+        <label class="chk"><input type="checkbox" id="opt-eco"> Économie d’énergie (30 i/s)</label>
+      </section>
+      <section class="legend">
+        <h3>Légende</h3>
+        <div id="legend"></div>
+      </section>
+      <button id="left-toggle" class="panel-toggle" title="Masquer le panneau">&#9664;</button>
+    </aside>
+
+    <aside id="details" class="panel" hidden>
+      <button id="details-close" class="close" title="Fermer (Echap)">&times;</button>
+      <div id="details-body"></div>
+    </aside>
+
+    <section id="bottom" class="panel">
+      <div class="tabs">
+        <button class="tab active" data-tab="alarms">Alarmes <span id="alarm-count" class="count">0</span></button>
+        <button class="tab" data-tab="collectors">Collecteurs <span id="collector-count" class="count">0</span></button>
+        <label class="chk inline"><input type="checkbox" id="show-acked"> afficher acquittées</label>
+        <button id="bottom-toggle" class="icon" title="Replier">&#9660;</button>
+      </div>
+      <div id="tab-alarms" class="tab-body"></div>
+      <div id="tab-collectors" class="tab-body" hidden></div>
+    </section>
+
+    <div id="tooltip" hidden></div>
+    <div id="loading"><div class="spinner"></div><p>Chargement de la topologie…</p></div>
+    <div id="webgl-error" hidden>
+      <h2>WebGL indisponible</h2>
+      <p>La vue 3D nécessite WebGL. Utilisez Microsoft Edge ou Google Chrome à jour et vérifiez que l’accélération matérielle est activée (edge://settings/system).</p>
+    </div>
+  </div>
+  <script type="module" src="/js/main.js"></script>
+</body>
+</html>

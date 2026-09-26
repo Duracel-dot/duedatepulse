@@ -1,0 +1,24 @@
+{
+  "name": "supervisionng",
+  "version": "0.1.0",
+  "description": "SupervisionNG - vue 3D unique et integrale de l'infrastructure : physique, systeme, reseau, hyperviseurs, VM et flux",
+  "type": "module",
+  "main": "server/index.js",
+  "scripts": {
+    "start": "node server/index.js",
+    "demo": "node server/index.js --demo",
+    "test": "node --test",
+    "package:win": "node scripts/build-release.mjs"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "three": "^0.186.1"
+  },
+  "optionalDependencies": {
+    "net-snmp": "^3.29.1"
+  },
+  "license": "MIT",
+  "private": true
+}

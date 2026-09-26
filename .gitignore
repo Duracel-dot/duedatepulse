@@ -1,0 +1,8 @@
+node_modules/
+dist/
+logs/
+config/supervisionng.json
+config/inventory.json
+*.log
+.DS_Store
+Thumbs.db

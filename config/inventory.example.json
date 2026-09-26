@@ -1,0 +1,68 @@
+// Inventaire physique SupervisionNG (format JSON avec commentaires).
+// Copier en config/inventory.json. Le fichier est relu automatiquement a chaque modification.
+//
+// L'inventaire decrit ce qui ne se decouvre pas : ou se trouvent les equipements.
+// Les collecteurs (Hyper-V, vCenter, SNMP, WinRM...) y rattachent automatiquement
+// ce qu'ils voient grace aux cles de correlation : hostname, serial, mac, uuid.
+// Un equipement decouvert mais absent de l'inventaire apparait dans la zone
+// "Equipements non positionnes".
+{
+  "sites": [
+    {
+      "id": "site-siege", "name": "Siege - Salle informatique", "location": "Batiment A, sous-sol",
+      "rooms": [
+        {
+          "id": "salle-1", "name": "Salle serveurs",
+          "rows": [
+            {
+              "name": "A", "rotation": 0,        // 0 : facades vers +Z ; 180 : facades vers -Z (allee froide partagee)
+              "racks": [
+                {
+                  "id": "A01", "units": 42,
+                  "devices": [
+                    // u = position basse (1 = bas de baie), height = hauteur en U
+                    { "id": "fw-1",   "type": "firewall", "name": "FW-1",   "u": 40, "height": 1, "hostname": "fw-1",   "ip": "10.0.0.254", "vendor": "Fortinet", "model": "FortiGate 200F" },
+                    { "id": "core-1", "type": "switch",   "name": "CORE-1", "u": 38, "height": 1, "hostname": "core-1", "ip": "10.0.0.1",   "vendor": "Aruba",    "model": "CX 6300M" },
+                    { "id": "core-2", "type": "switch",   "name": "CORE-2", "u": 37, "height": 1, "hostname": "core-2", "ip": "10.0.0.2",   "vendor": "Aruba",    "model": "CX 6300M" },
+                    { "id": "nas-1",  "type": "storage",  "name": "NAS-1",  "u": 10, "height": 2, "hostname": "nas-1",  "ip": "10.0.0.30",  "vendor": "Synology", "model": "RS3621xs+" }
+                  ]
+                },
+                {
+                  "id": "A02", "units": 42,
+                  "devices": [
+                    { "id": "hv01", "type": "server", "name": "HV01", "u": 20, "height": 2, "hostname": "HV01", "serial": "CZJ1234567", "vendor": "HPE", "model": "ProLiant DL380 Gen10" },
+                    { "id": "hv02", "type": "server", "name": "HV02", "u": 17, "height": 2, "hostname": "HV02", "serial": "CZJ7654321", "vendor": "HPE", "model": "ProLiant DL380 Gen10" },
+                    { "id": "srv-backup", "type": "server", "name": "SRV-BACKUP", "u": 5, "height": 2, "hostname": "srv-backup", "vendor": "Dell", "model": "PowerEdge R740xd" },
+                    { "id": "ups-1", "type": "ups", "name": "UPS-1", "u": 1, "height": 3, "vendor": "Eaton", "model": "9PX 6kVA" }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ],
+
+  // Cablage connu (complete automatiquement par LLDP via le collecteur SNMP)
+  "links": [
+    { "a": "core-1", "aPort": "1/1/1", "b": "hv01", "bPort": "NIC1", "speed": "10G" },
+    { "a": "core-2", "aPort": "1/1/1", "b": "hv01", "bPort": "NIC2", "speed": "10G" },
+    { "a": "core-1", "aPort": "1/1/2", "b": "hv02", "bPort": "NIC1", "speed": "10G" },
+    { "a": "core-2", "aPort": "1/1/2", "b": "hv02", "bPort": "NIC2", "speed": "10G" },
+    { "a": "core-1", "aPort": "1/1/10", "b": "nas-1", "speed": "10G" },
+    { "a": "core-1", "aPort": "1/1/48", "b": "core-2", "bPort": "1/1/48", "speed": "25G", "label": "VSX ISL" },
+    { "a": "fw-1", "aPort": "port1", "b": "core-1", "bPort": "1/1/47", "speed": "10G" },
+    { "a": "fw-1", "aPort": "wan1", "b": "internet", "speed": "1G", "kind": "wan" },
+    { "a": "fw-1", "aPort": "wan2", "b": "mpls", "speed": "100M", "kind": "wan" },
+    { "a": "mpls", "b": "agence-lyon", "speed": "100M", "kind": "wan" }
+  ],
+
+  // Entites externes : cibles des flux sortants du perimetre inventorie
+  "externals": [
+    { "id": "internet", "name": "Internet", "kind": "internet", "default": "internet" },  // toute IP publique inconnue
+    { "id": "mpls", "name": "WAN MPLS", "kind": "wan" },
+    { "id": "agence-lyon", "name": "Agence Lyon", "kind": "site", "cidrs": ["10.50.0.0/16"] },
+    { "id": "m365", "name": "Microsoft 365", "kind": "cloud", "cidrs": ["52.96.0.0/14", "40.96.0.0/13", "13.107.0.0/16"] }
+  ]
+}
