@@ -5,7 +5,7 @@ import { inventoryToSnapshot } from '../server/model/inventory.js';
 import { buildIndex, flowPath, physicalAnchor } from '../shared/graph.js';
 import { buildKeys, hostKey, serialKey, macKey, parseCidr, cidrContains, parseSpeed, flowCategory, worstStatus } from '../shared/model.js';
 import { buildDemoWorld } from '../server/collectors/demo-world.js';
-import { parsePowerShellJson, asArray, psDate } from '../server/util/powershell.js';
+import { parsePowerShellJson, asArray, psDate, powershellEnv } from '../server/util/powershell.js';
 
 test('JSONC : commentaires et virgules finales, sans toucher aux chaines', () => {
   const o = parseJsonc(`{
@@ -103,4 +103,12 @@ test('PowerShell : extraction du JSON et normalisations 5.1', () => {
   assert.deepEqual(asArray({ a: 1 }), [{ a: 1 }]);
   assert.deepEqual(asArray(null), []);
   assert.equal(psDate('/Date(1700000000000)/').getTime(), 1700000000000);
+});
+
+test('PowerShell 5.1 : chemins de modules de PowerShell 7 retires de PSModulePath', () => {
+  const base = { PSModulePath: 'C:\\Users\\x\\Documents\\PowerShell\\Modules;C:\\Program Files\\PowerShell\\Modules;c:\\program files\\powershell\\7\\Modules;C:\\Program Files\\WindowsPowerShell\\Modules;C:\\Windows\\system32\\WindowsPowerShell\\v1.0\\Modules;D:\\Modules' };
+  assert.equal(powershellEnv('powershell.exe', base).PSModulePath,
+    'C:\\Program Files\\WindowsPowerShell\\Modules;C:\\Windows\\system32\\WindowsPowerShell\\v1.0\\Modules;D:\\Modules');
+  assert.equal(powershellEnv('pwsh.exe', base).PSModulePath, base.PSModulePath, 'PowerShell 7 : inchange');
+  assert.equal(powershellEnv('powershell.exe', { PSModulePath: 'C:\\Program Files\\PowerShell\\7\\Modules' }).PSModulePath, undefined);
 });

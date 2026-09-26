@@ -6,6 +6,7 @@
 // Toute autre valeur est retournee telle quelle.
 import fs from 'node:fs';
 import { spawnSync } from 'node:child_process';
+import { powershellEnv } from './powershell.js';
 
 const SECRET_FIELDS = /^(password|pass|secret|token|tokenSecret|community|authKey|privKey|apiKey)$/i;
 
@@ -35,7 +36,7 @@ function unprotectDpapi(b64) {
     '[Console]::Out.Write([Convert]::ToBase64String($p))',
   ].join('; ');
   const r = spawnSync('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', script], {
-    env: { ...process.env, SNG_DPAPI: b64 }, encoding: 'utf8', windowsHide: true, timeout: 20000,
+    env: { ...powershellEnv('powershell.exe'), SNG_DPAPI: b64 }, encoding: 'utf8', windowsHide: true, timeout: 20000,
   });
   if (r.status !== 0) throw new Error(`dechiffrement DPAPI impossible : ${(r.stderr || '').trim()}`);
   return Buffer.from(r.stdout.trim(), 'base64').toString('utf8');

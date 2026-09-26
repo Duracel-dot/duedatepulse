@@ -5,7 +5,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { runPowerShellScript, asArray, parsePowerShellJson } from '../server/util/powershell.js';
+import { runPowerShellScript, asArray, parsePowerShellJson, powershellEnv } from '../server/util/powershell.js';
 import { windowsToSnapshot } from '../server/collectors/windows.js';
 import { hypervToSnapshot } from '../server/collectors/hyperv.js';
 
@@ -33,7 +33,7 @@ const psExe = findTestPowerShell();
 function runMocked(script, params, extraEnv = {}) {
   const mocks = path.join(root, 'test', 'fixtures', 'ps-mocks.ps1');
   const file = path.join(root, 'scripts', 'ps', script);
-  const env = { ...process.env, SNG_PARAMS: JSON.stringify(params), ...extraEnv };
+  const env = { ...powershellEnv(psExe), SNG_PARAMS: JSON.stringify(params), ...extraEnv };
   if (!extraEnv.SNG_USER) { delete env.SNG_USER; delete env.SNG_PASS; }
   const r = spawnSync(psExe, ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-Command', `. '${mocks}'; & '${file}'`], {
     env, encoding: 'utf8', windowsHide: true, timeout: 120000,

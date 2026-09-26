@@ -117,7 +117,7 @@ function openBrowser(url) {
         process.env.ProgramFiles && path.join(process.env.ProgramFiles, 'Microsoft', 'Edge', 'Application', 'msedge.exe'),
       ].find((p) => p && fs.existsSync(p));
       if (edge) spawn(edge, [`--app=${url}`], { detached: true, stdio: 'ignore' }).unref();
-      else spawn('cmd.exe', ['/c', 'start', '""', url], { detached: true, stdio: 'ignore', windowsHide: true }).unref();
+      else spawn('explorer.exe', [url], { detached: true, stdio: 'ignore' }).unref();
     } else if (process.platform === 'darwin') {
       spawn('open', [url], { detached: true, stdio: 'ignore' }).unref();
     } else {

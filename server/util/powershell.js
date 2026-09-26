@@ -32,6 +32,24 @@ export function findPowerShell(preferred) {
   return cachedExe;
 }
 
+/**
+ * Environnement d'un processus PowerShell. Lance depuis une console PowerShell 7,
+ * Windows PowerShell 5.1 herite d'un PSModulePath pointant vers les modules de
+ * PowerShell 7 et echoue a charger ses propres modules (ex. ConvertTo-SecureString
+ * de Microsoft.PowerShell.Security). On retire donc ces chemins pour powershell.exe.
+ */
+export function powershellEnv(exe, base = process.env) {
+  const env = { ...base };
+  if (/(^|[\\/])powershell(\.exe)?$/i.test(String(exe || ''))) {
+    const key = Object.keys(env).find((k) => k.toLowerCase() === 'psmodulepath');
+    if (key) {
+      const kept = String(env[key]).split(';').filter((p) => p && (!/[\\/]PowerShell[\\/]/i.test(p) || /WindowsPowerShell/i.test(p)));
+      if (kept.length) env[key] = kept.join(';'); else delete env[key];
+    }
+  }
+  return env;
+}
+
 export class PowerShellError extends Error {
   constructor(message, { stderr = '', code = null } = {}) {
     super(message);
@@ -53,7 +71,7 @@ export function runPowerShellScript(scriptName, params = {}, opts = {}) {
     return Promise.reject(new PowerShellError('PowerShell introuvable (powershell.exe ou pwsh requis)'));
   }
   const file = path.join(PS_SCRIPTS_DIR, scriptName);
-  const env = { ...process.env, SNG_PARAMS: JSON.stringify(params) };
+  const env = { ...powershellEnv(exe), SNG_PARAMS: JSON.stringify(params) };
   delete env.SNG_USER;
   delete env.SNG_PASS;
   if (opts.credential?.username) {

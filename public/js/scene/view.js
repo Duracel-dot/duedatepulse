@@ -13,6 +13,7 @@ import { FlowLayer } from './flows.js';
 
 const BOX = new THREE.BoxGeometry(1, 1, 1);
 const HEX = new THREE.CylinderGeometry(0.5, 0.5, 1, 6);
+const BEACON = new THREE.CylinderGeometry(1, 0.6, 1, 20, 1, true);
 const UP = new THREE.Vector3(0, 1, 0);
 const LABEL_RANGE = { site: Infinity, room: 60, rack: 16, cluster: 70, hypervisor: 22, external: 90, device: 7, vm: 5 };
 
@@ -721,47 +722,52 @@ export class SceneView extends EventTarget {
     }
   }
 
-  /** Colonnes lumineuses au-dessus des baies / hyperviseurs en alerte. */
+  /** Colonnes lumineuses au-dessus des baies / hyperviseurs en alerte (maillages instancies). */
   buildBeacons() {
     const g = this.groups.beacons;
     clearGroup(g);
     this.beacons = [];
     const L = this.layout;
-    const add = (x, y0, z, h, st, r = 0.18) => {
-      const mat = new THREE.MeshBasicMaterial({ color: statusColor(st), transparent: true, opacity: 0.25, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide, toneMapped: false });
-      const cyl = new THREE.Mesh(new THREE.CylinderGeometry(r, r * 0.6, h, 20, 1, true), mat);
-      cyl.position.set(x, y0 + h / 2, z);
-      g.add(cyl);
-      this.beacons.push({ mesh: cyl, st, phase: Math.random() * 6 });
-    };
-    for (const [id, r] of L.racks) {
-      const st = this.model.agg.get(id);
-      if (!this.layers.physical && !this.layers.network) break;
-      if (st !== 'critical' && st !== 'warning') continue;
-      // on ne signale une baie que si un equipement physique est en cause
-      const phys = [...(this.model.children.get(id) || [])].map((c) => this.model.get(c)).filter(Boolean);
-      const worst = phys.reduce((w, e) => (statusRank(e.status) > statusRank(w) ? e.status : w), 'unknown');
-      if (worst !== 'critical' && worst !== 'warning') continue;
-      add(r.x, r.h, r.z, 1.1, worst, 0.26);
+    const items = { critical: [], warning: [] };
+    const add = (x, y0, z, h, st, r = 0.18) => { if (items[st]) items[st].push([x, y0, z, h, r]); };
+    if (this.layers.physical || this.layers.network) {
+      for (const [id, r] of L.racks) {
+        const st = this.model.agg.get(id);
+        if (st !== 'critical' && st !== 'warning') continue;
+        // on ne signale une baie que si un equipement physique est en cause
+        const phys = [...(this.model.children.get(id) || [])].map((c) => this.model.get(c)).filter(Boolean);
+        const worst = phys.reduce((w, e) => (statusRank(e.status) > statusRank(w) ? e.status : w), 'unknown');
+        if (worst === 'critical' || worst === 'warning') add(r.x, r.h, r.z, 1.1, worst, 0.26);
+      }
     }
     if (this.layers.hypervisor) {
       for (const [id, t] of L.tiles) {
         const e = this.model.get(id);
-        if (!e || (e.status !== 'critical' && e.status !== 'warning')) continue;
-        add(t.x, t.y, t.z, 0.9, e.status, Math.min(t.w, t.d) * 0.35);
+        if (e && (e.status === 'critical' || e.status === 'warning')) add(t.x, t.y, t.z, 0.9, e.status, Math.min(t.w, t.d) * 0.35);
       }
     }
     if (this.layers.vm) {
       for (const [id, v] of L.vms) {
         const e = this.model.get(id);
-        if (!e || e.status !== 'critical') continue;
-        add(v.x, v.y + v.s / 2, v.z, 0.55, 'critical', 0.09);
+        if (e?.status === 'critical') add(v.x, v.y + v.s / 2, v.z, 0.55, 'critical', 0.09);
       }
     }
     for (const [id, p] of L.externals) {
       const e = this.model.get(id);
-      if (!e || (e.status !== 'critical' && e.status !== 'warning')) continue;
-      add(p.x, p.y + p.r, p.z, 1.2, e.status, 0.3);
+      if (e && (e.status === 'critical' || e.status === 'warning')) add(p.x, p.y + p.r, p.z, 1.2, e.status, 0.3);
+    }
+    const m = new THREE.Matrix4();
+    for (const [st, list] of Object.entries(items)) {
+      if (!list.length) continue;
+      const mat = new THREE.MeshBasicMaterial({ color: statusColor(st), transparent: true, opacity: 0.25, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide, toneMapped: false });
+      const mesh = new THREE.InstancedMesh(BEACON, mat, list.length);
+      list.forEach(([x, y0, z, h, r], i) => {
+        m.compose(new THREE.Vector3(x, y0 + h / 2, z), new THREE.Quaternion(), new THREE.Vector3(r, h, r));
+        mesh.setMatrixAt(i, m);
+      });
+      mesh.frustumCulled = false;
+      g.add(mesh);
+      this.beacons.push({ mesh, st, phase: st === 'critical' ? 0 : 1.7 });
     }
   }
 
@@ -1182,7 +1188,7 @@ function clearGroup(g) {
   for (const child of [...g.children]) {
     g.remove(child);
     child.traverse((o) => {
-      if (o.geometry && o.geometry !== BOX && o.geometry !== HEX) o.geometry.dispose();
+      if (o.geometry && o.geometry !== BOX && o.geometry !== HEX && o.geometry !== BEACON) o.geometry.dispose();
       if (o.material) {
         const mats = Array.isArray(o.material) ? o.material : [o.material];
         for (const m of mats) { if (m.map && m.map.isTexture) m.map.dispose(); m.dispose(); }
