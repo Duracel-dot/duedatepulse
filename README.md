@@ -40,14 +40,26 @@ Fonctions principales :
 
 ## Démarrage rapide sous Windows
 
-### Option 1 — paquet autonome (recommandé, sans installation)
+### Option 1 — paquet prêt à l'emploi (recommandé)
 
-1. Récupérer `SupervisionNG-x.y.z-win-x64.zip` (artefact **SupervisionNG-win-x64** de la
-   CI GitHub Actions, ou `npm run package:win -- --with-node` sur un poste de build).
+1. Récupérer **`SupervisionNG-x.y.z-windows.zip`** (≈ 6 Mo, dépendances incluses).
 2. Décompresser, par exemple dans `C:\SupervisionNG`.
 3. Double-cliquer sur **`SupervisionNG.cmd`**.
 
-Le paquet embarque `node.exe` et toutes les dépendances : aucun accès Internet n'est nécessaire.
+Si Node.js 20+ n'est pas installé, le lanceur télécharge automatiquement Node.js portable
+depuis nodejs.org (somme de contrôle SHA-256 vérifiée, proxy système pris en compte) dans
+le sous-dossier `node\`. Rien n'est installé dans Windows.
+
+**Poste sans accès Internet** : utiliser le paquet hors-ligne, qui embarque `node.exe`
+(artefact **SupervisionNG-win-x64** de la CI GitHub Actions, ou
+`npm run package:win -- --with-node`). S'il est fourni en deux parties
+(`.zip.001` et `.zip.002`), les recomposer dans une invite de commandes :
+
+```bat
+copy /b SupervisionNG-0.1.0-windows-hors-ligne.zip.001 + SupervisionNG-0.1.0-windows-hors-ligne.zip.002 SupervisionNG-hors-ligne.zip
+```
+
+(7-Zip ouvre aussi directement le fichier `.001`.)
 
 ### Option 2 — depuis les sources
 
