@@ -215,7 +215,13 @@ arrêtée par un conseil réunissant un expert en supervision, un designer UI/UX
 - un stockage de métrologie sur 13 mois ;
 - une feuille de route en deux refontes.
 
-Le dossier contient aussi les maquettes et les comptes rendus complets du conseil.
+Le dossier contient aussi les maquettes et les comptes rendus complets du conseil, ainsi que
+l'[architecture du backend](docs/refonte/ARCHITECTURE-BACKEND.md) : socle Telegraf et VictoriaMetrics,
+méthodes de remontée et mesures de sécurité.
+
+Une **démo jouable du nouveau front** est servie par l'application, hors ligne : lancer la démonstration
+(`SupervisionNG.cmd` ou `npm run demo`), puis ouvrir <http://localhost:8080/refonte/>. Elle rejoue un
+incident avec des données figées.
 
 ## Licence
 

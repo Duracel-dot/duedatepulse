@@ -1,0 +1,164 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>SupervisionNG Refonte</title>
+<meta name="sng-three" content="/vendor/three/build/three.module.js">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="fonts/plex.css">
+<link rel="stylesheet" href="refonte.css">
+</head>
+<body>
+<!-- sng:app -->
+<div id="app" class="app" data-view="physique" data-console="bande">
+  <header class="hud">
+    <div class="hud-l">
+      <span class="logo" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"><path d="M10 2 L17 6 L17 14 L10 18 L3 14 L3 6 Z M3 6 L10 10 L17 6 M10 10 L10 18"/></svg></span>
+      <span class="brand">SupervisionNG</span>
+      <span class="demo-tag">démo refonte</span>
+      <span class="sep" aria-hidden="true"></span>
+      <nav class="crumbs" id="crumbs" aria-label="Périmètre"></nav>
+    </div>
+    <div class="hud-r">
+      <div class="counters" id="counters" role="group" aria-label="Alarmes non prises en charge">
+        <button type="button" class="ctr" data-prio="1" aria-label="Alarmes P1 non prises en charge"><span class="glyph g-p1" aria-hidden="true"></span><b>0</b></button>
+        <button type="button" class="ctr" data-prio="2" aria-label="Alarmes P2 non prises en charge"><span class="glyph g-p2" aria-hidden="true"></span><b>0</b></button>
+        <button type="button" class="ctr" data-prio="3" aria-label="Alarmes P3 non prises en charge"><span class="glyph g-p3" aria-hidden="true"></span><b>0</b></button>
+      </div>
+      <span class="sep" aria-hidden="true"></span>
+      <span class="age mono" id="age"><i aria-hidden="true"></i><span>données il y a 4 s</span></span>
+      <span class="replay-tag mono" id="replay-tag" hidden></span>
+      <span class="clock mono" id="clock">--:--:--</span>
+      <button type="button" class="hud-btn" id="btn-demo" title="Rejoue l'incident depuis la panne de la première alimentation">Rejouer l'incident</button>
+      <button type="button" class="hud-btn square" id="btn-help" aria-label="Aide et raccourcis">?</button>
+    </div>
+  </header>
+
+  <nav class="rail" aria-label="Vues">
+    <div class="rail-views">
+      <button type="button" data-view="physique" aria-label="Vue physique (1)" title="Vue physique · 1"><svg viewBox="0 0 20 20"><path d="M10 2 L17 6 L17 14 L10 18 L3 14 L3 6 Z M3 6 L10 10 L17 6 M10 10 L10 18"/></svg></button>
+      <button type="button" data-view="services" aria-label="Services et impacts (2)" title="Services et impacts · 2"><svg viewBox="0 0 20 20"><path d="M2.5 3.5 H8 V8 H2.5 Z M12 3.5 H17.5 V8 H12 Z M7.25 12.5 H12.75 V17 H7.25 Z M5.25 8 L10 12.5 M14.75 8 L10 12.5"/></svg></button>
+      <button type="button" data-view="reseau" aria-label="Réseau L2 (3)" title="Réseau L2 · 3"><svg viewBox="0 0 20 20"><path d="M2 6 H8 Q10 6 10 8 V12 Q10 14 12 14 H18 M2 14 H6.5 M13.5 6 H18"/></svg></button>
+      <button type="button" data-view="virtualisation" aria-label="Virtualisation et capacité (4)" title="Virtualisation · 4"><svg viewBox="0 0 20 20"><path d="M3 3 H17 V17 H3 Z M10.5 3 V17 M10.5 10 H17 M3 12 H10.5"/></svg></button>
+      <button type="button" data-view="flux" aria-label="Flux (5)" title="Flux · 5"><svg viewBox="0 0 20 20"><path d="M2 5 C8 5 10 12 18 12 M2 10 C8 10 11 6 18 6 M2 15.5 C9 15.5 11 16 18 16"/></svg></button>
+      <button type="button" data-view="metrologie" aria-label="Métrologie (6)" title="Métrologie · 6"><svg viewBox="0 0 20 20"><path d="M2 15 L6 9.5 L9 11.5 L13 5 L18 8 M2 18 H18"/></svg></button>
+    </div>
+    <div class="rail-tools">
+      <button type="button" id="btn-console" aria-label="Console d'événements (E)" title="Console d'événements · E"><svg viewBox="0 0 20 20"><path d="M3 5 H17 M3 10 H17 M3 15 H12"/></svg></button>
+      <button type="button" id="btn-calque" aria-pressed="true" aria-label="Calque logique (C)" title="Calque logique · C"><svg viewBox="0 0 20 20"><path d="M10 3 L18 7 L10 11 L2 7 Z M2 11 L10 15 L18 11"/></svg></button>
+      <button type="button" id="btn-mur" aria-label="Mode mur d'écrans (M)" title="Mode mur · M"><svg viewBox="0 0 20 20"><path d="M2.5 3.5 H9 V9 H2.5 Z M11 3.5 H17.5 V9 H11 Z M2.5 11 H9 V16.5 H2.5 Z M11 11 H17.5 V16.5 H11 Z"/></svg></button>
+    </div>
+  </nav>
+
+  <main class="main" id="main">
+    <section class="console" id="console" aria-label="Console d'événements">
+      <div class="con-head">
+        <div class="con-title"><h2>Événements</h2><span class="mono" id="con-count"></span></div>
+        <div class="con-size" role="group" aria-label="Taille de la console">
+          <button type="button" data-size="panneau" aria-label="Console en panneau">40 %</button>
+          <button type="button" data-size="plein" aria-label="Console plein écran">plein</button>
+          <button type="button" data-size="bande" aria-label="Réduire la console en bande">réduire</button>
+        </div>
+      </div>
+      <div class="con-filters" id="con-filters" role="group" aria-label="Filtres">
+        <button type="button" class="chip" data-f="1" aria-pressed="true"><span class="glyph g-p1" aria-hidden="true"></span>P1 <b></b></button>
+        <button type="button" class="chip" data-f="2" aria-pressed="true"><span class="glyph g-p2" aria-hidden="true"></span>P2 <b></b></button>
+        <button type="button" class="chip" data-f="3" aria-pressed="true"><span class="glyph g-p3" aria-hidden="true"></span>P3 <b></b></button>
+        <button type="button" class="chip" data-f="unacked" aria-pressed="false">Non pris en charge</button>
+        <button type="button" class="chip" data-f="maint" aria-pressed="true">Maintenances <b></b></button>
+      </div>
+      <div class="con-cols" aria-hidden="true"><span></span><span>ÂGE</span><span>OBJET</span><span>ÉVÉNEMENT</span><span>PRISE EN CHARGE</span></div>
+      <div class="con-list" id="con-list" role="list"></div>
+      <div class="con-foot mono"><span>journal complet · 30 j</span><span>Entrée : ouvrir dans la vue physique</span></div>
+    </section>
+
+    <div class="stage" id="stage">
+      <div class="view view-physique" id="view-physique">
+        <div class="scene-host" id="scene-host"></div>
+        <div class="scene-tools" role="group" aria-label="Caméra">
+          <button type="button" id="btn-home" title="Vue d'ensemble · H">Vue d'ensemble</button>
+          <button type="button" id="btn-frame" title="Cadrer la sélection · F">Cadrer</button>
+        </div>
+        <p class="scene-hint mono" id="scene-hint">glisser : tourner · clic droit : déplacer · molette : zoom · double-clic : cadrer</p>
+        <div class="scene-fallback" id="scene-fallback" hidden></div>
+      </div>
+      <div class="view" id="view-services" hidden></div>
+      <div class="view" id="view-reseau" hidden></div>
+      <div class="view" id="view-virtualisation" hidden></div>
+      <div class="view" id="view-flux" hidden></div>
+      <div class="view view-metrologie" id="view-metrologie" hidden>
+        <div class="mt-bar">
+          <div class="mt-title"><h2>Métrologie</h2><span class="mono" id="mt-scope"></span></div>
+          <div class="seg" role="group" aria-label="Période" id="mt-period">
+            <button type="button" data-p="24h" aria-pressed="false">24 h</button>
+            <button type="button" data-p="7j" aria-pressed="true">7 j</button>
+            <button type="button" data-p="30j" aria-pressed="false">30 j</button>
+          </div>
+          <label class="check"><input type="checkbox" id="mt-compare" checked> Comparer à la période précédente</label>
+          <span class="mono mt-readout" id="mt-readout"></span>
+        </div>
+        <div class="mt-body"><div class="mt-main" id="mt-main"></div><div id="mt-side"></div></div>
+      </div>
+
+      <div class="lens" id="lens">
+        <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M8.5 3 A5.5 5.5 0 1 0 8.5 14 A5.5 5.5 0 1 0 8.5 3 M12.5 12.5 L17 17"/></svg>
+        <label for="lens-q">Lentille</label>
+        <input id="lens-q" type="text" autocomplete="off" spellcheck="false" placeholder="objet, IP, application, vue…" role="combobox" aria-expanded="false" aria-controls="lens-results">
+        <kbd>Ctrl K</kbd>
+        <ul id="lens-results" role="listbox" hidden></ul>
+      </div>
+      <div class="tip" id="tip" hidden></div>
+    </div>
+
+    <aside class="inspector" id="inspector" hidden aria-label="Inspecteur"></aside>
+  </main>
+
+  <footer class="band" id="band"></footer>
+
+  <div class="mur" id="mur" hidden>
+    <section class="mur-cell" id="mur-services" aria-label="Écran 1 : services"></section>
+    <section class="mur-cell" id="mur-console" aria-label="Écran 2 : événements"></section>
+    <section class="mur-cell mur-scene" id="mur-scene" aria-label="Écran 3 : vue physique"></section>
+    <section class="mur-cell" id="mur-wan" aria-label="Écran 4 : réseau étendu"></section>
+    <button type="button" class="mur-exit" id="mur-exit">Quitter le mode mur · Échap</button>
+  </div>
+
+  <div class="help" id="help" hidden role="dialog" aria-modal="true" aria-labelledby="help-title">
+    <div class="help-card">
+      <div class="help-head"><h2 id="help-title">Démo du nouveau front</h2><button type="button" class="hud-btn" id="help-close">Fermer · Échap</button></div>
+      <p>Cette démo rejoue un incident sur le monde de démonstration de SupervisionNG : l'hôte <span class="mono">esx-par-08</span> perd ses deux alimentations. Les données sont figées ; la démo ne lit pas encore le serveur.</p>
+      <div class="help-grid">
+        <section>
+          <h3>Essayer</h3>
+          <ul>
+            <li>Cliquer la ligne <span class="mono">esx-par-08</span> de la bande, puis <b>Prendre en charge</b> dans la console.</li>
+            <li>Passer d'une vue à l'autre : la sélection suit.</li>
+            <li><b>Rejouer l'incident</b> : la cascade se regroupe en une seule ligne.</li>
+            <li>Survoler un service pour voir sa chaîne de dépendances.</li>
+            <li>En métrologie, survoler une courbe : le réticule est partagé.</li>
+          </ul>
+        </section>
+        <section>
+          <h3>Raccourcis</h3>
+          <dl class="keys">
+            <div><dt><kbd>1</kbd>…<kbd>6</kbd></dt><dd>changer de vue</dd></div>
+            <div><dt><kbd>E</kbd></dt><dd>console : bande, 40 %, plein écran</dd></div>
+            <div><dt><kbd>Ctrl</kbd> <kbd>K</kbd></dt><dd>lentille de recherche</dd></div>
+            <div><dt><kbd>Entrée</kbd></dt><dd>ouvrir l'événement dans la vue physique</dd></div>
+            <div><dt><kbd>F</kbd> / <kbd>H</kbd></dt><dd>cadrer la sélection, vue d'ensemble</dd></div>
+            <div><dt><kbd>C</kbd></dt><dd>afficher ou masquer le calque logique</dd></div>
+            <div><dt><kbd>R</kbd></dt><dd>relecture des dernières 24 h</dd></div>
+            <div><dt><kbd>M</kbd></dt><dd>mode mur d'écrans</dd></div>
+            <div><dt><kbd>Échap</kbd></dt><dd>fermer, désélectionner</dd></div>
+          </dl>
+        </section>
+      </div>
+    </div>
+  </div>
+  <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+</div>
+<!-- /sng:app -->
+<script type="module" src="js/main.js"></script>
+</body>
+</html>

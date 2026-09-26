@@ -17,6 +17,7 @@ const MIME = {
   '.png': 'image/png',
   '.ico': 'image/x-icon',
   '.woff2': 'font/woff2',
+  '.txt': 'text/plain; charset=utf-8',
   '.map': 'application/json',
 };
 
@@ -183,13 +184,18 @@ export function createHttpServer({ config, store, collectors, logger, info }) {
 
 function serveStatic(req, res, pathname) {
   let rel = decodeURIComponent(pathname);
-  if (rel === '/') rel = '/index.html';
+  if (rel.endsWith('/')) rel += 'index.html';
   for (const { prefix, dir } of STATIC_ROOTS) {
     if (!rel.startsWith(prefix)) continue;
     const file = path.resolve(dir, '.' + rel.slice(prefix.length - 1));
     if (!file.startsWith(dir + path.sep)) break;
     let st;
     try { st = fs.statSync(file); } catch { continue; }
+    if (st.isDirectory() && fs.existsSync(path.join(file, 'index.html'))) {
+      // dossier servi comme page (ex. /refonte -> /refonte/) pour que les chemins relatifs se résolvent
+      res.writeHead(301, { Location: `/${pathname.replace(/^\/+/, '')}/` });
+      return res.end();
+    }
     if (!st.isFile()) continue;
     const ext = path.extname(file).toLowerCase();
     const type = MIME[ext] || 'application/octet-stream';

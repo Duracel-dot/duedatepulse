@@ -8,7 +8,8 @@
     "start": "node server/index.js",
     "demo": "node server/index.js --demo",
     "test": "node --test",
-    "package:win": "node scripts/build-release.mjs"
+    "package:win": "node scripts/build-release.mjs",
+    "refonte:data": "node scripts/refonte-demo-data.mjs"
   },
   "engines": {
     "node": ">=20"

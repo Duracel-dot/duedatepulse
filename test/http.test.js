@@ -111,3 +111,20 @@ test('fichiers statiques et three.js servis localement', async () => {
   assert.equal((await fetch(`${base}/../package.json`)).status, 404);
   assert.equal((await fetch(`${base}/%2e%2e/package.json`)).status, 404);
 });
+
+test('démo de la refonte servie sur /refonte/ (hors ligne)', async () => {
+  const r0 = await fetch(`${base}/refonte`, { redirect: 'manual' });
+  assert.equal(r0.status, 301);
+  assert.equal(r0.headers.get('location'), '/refonte/');
+  const r1 = await fetch(`${base}/refonte/`);
+  assert.equal(r1.status, 200);
+  const html = await r1.text();
+  assert.match(html, /sng:app/);
+  assert.match(html, /\/vendor\/three\/build\/three\.module\.js/, 'three.js local, pas de CDN');
+  for (const [p, type] of [['/refonte/js/main.js', 'text/javascript'], ['/refonte/js/world.js', 'text/javascript'], ['/refonte/fonts/IBMPlexSans.woff2', 'font/woff2'], ['/refonte/fonts/OFL.txt', 'text/plain']]) {
+    const r = await fetch(`${base}${p}`);
+    assert.equal(r.status, 200, p);
+    assert.ok(r.headers.get('content-type').startsWith(type), p);
+    await r.arrayBuffer();
+  }
+});

@@ -4,7 +4,9 @@ Ce dossier fixe la direction de la prochaine grande refonte. Il réunit :
 
 - la synthèse du conseil (ce fichier) : décisions, arbitrages et feuille de route ;
 - les comptes rendus complets des deux tours du conseil, dans [`conseil/`](conseil/) ;
-- les maquettes de la piste retenue, dans [`maquettes/`](maquettes/).
+- les maquettes de la piste retenue, dans [`maquettes/`](maquettes/) ;
+- l'architecture du backend (socle, méthodes de remontée, sécurité), dans [`ARCHITECTURE-BACKEND.md`](ARCHITECTURE-BACKEND.md) ;
+- une démo interactive du nouveau front, servie par l'application sur `/refonte/` (voir § 10).
 
 Le conseil réunissait trois points de vue : un expert en supervision et métrologie (NOC, Centreon, Zabbix, Prometheus, ITIL, SLA), un designer UI/UX spécialiste des salles de contrôle, et un directeur artistique 3D et data-visualisation. Au premier tour, chacun a produit un diagnostic et des recommandations numérotées (EXP-n, UX-n, DA-n). Au second tour, chacun a lu les deux autres, puis a voté et amendé. Les désaccords restants ont été arbitrés ci-dessous.
 
@@ -74,9 +76,9 @@ Le conseil réunissait trois points de vue : un expert en supervision et métrol
 
 **Métrologie** (EXP-4, EXP-11, EXP-12) :
 
-- **Stockage** : SQLite en WAL via `node:sqlite`, ce qui impose Node 24 LTS dans le paquet Windows. Une ligne contient une série sur une heure, en blocs compressés. On garde un fichier par palier et par mois, et la purge supprime des fichiers.
+- **Stockage** : VictoriaMetrics embarqué, en écoute locale seulement, avec une instance court terme et une instance long terme ; SQLite (`node:sqlite`, Node 24 LTS) pour le journal, la configuration et l'audit. Ce choix, fait après le conseil, est détaillé dans [`ARCHITECTURE-BACKEND.md`](ARCHITECTURE-BACKEND.md). Le stockage SQLite à paliers proposé par le conseil reste en repli.
 - **Paliers** : brut à 1 min sur 14 j, 15 min sur 90 j, 1 h sur 400 j (dont le p95), 1 j sur 5 ans. Le p95 se calcule sur le brut. Les trous restent visibles et ne sont jamais interpolés. Pour 2 000 VM, le tout occupe environ 12 à 15 Go.
-- **Accès** : une interface `MetricStore` isole `node:sqlite` et permet de brancher une base de séries tierce chez les grands comptes.
+- **Accès** : une interface `MetricStore` isole le stockage et permet de brancher une base de séries tierce chez les grands comptes.
 - **Refonte 1** : brut sur 14 j et palier horaire sur 13 mois, petits multiples, comparaison à J-7.
 - **Refonte 2** : plages normales (168 créneaux heure × jour), projection de saturation et rapports de disponibilité en PDF et CSV.
 
@@ -95,7 +97,7 @@ Une palette silencieuse sans suppression des alarmes filles laisse passer la tem
 
 **Ordre de travail proposé** :
 
-1. **Socle serveur.** Passer à Node 24 LTS (paquet, `get-node.ps1`, CI), implanter `MetricStore` et SQLite à paliers, puis le journal des transitions et le moteur d'événements par contrôle.
+1. **Socle serveur.** Passer à Node 24 LTS (paquet, `get-node.ps1`, CI). Construire la passerelle d'ingestion en mTLS, avec enrôlement des agents Telegraf. Embarquer VictoriaMetrics derrière `MetricStore`. Écrire le journal SQLite des transitions et le moteur d'événements par contrôle. Détail dans [`ARCHITECTURE-BACKEND.md`](ARCHITECTURE-BACKEND.md).
 2. **Sémantique.** Dépendances implicites (VM → hôte → ToR, LLDP) et déclarées, état « Injoignable », regroupement par cause, prise en charge et maintenances, rôles et audit, chien de garde des sources.
 3. **Ossature de l'interface.** `tokens.json` et polices Plex embarquées, HUD, rail, bande, lentille, sélection, périmètre et temps partagés, état dans l'URL.
 4. **Console et vue Services**, qui forment ensemble le poste N1 par défaut.
@@ -147,7 +149,7 @@ Une palette silencieuse sans suppression des alarmes filles laisse passer la tem
 ## 7. Risques à surveiller
 
 - **Dériver vers un « Centreon bis ».** Il faut tenir le positionnement : une carte vivante, une métrologie contextualisée et la corrélation.
-- **`node:sqlite` évolue encore.** L'interface `MetricStore` l'isole, avec `better-sqlite3` en repli.
+- **`node:sqlite` est en release candidate dans Node 24.** Il ne porte que le journal et la configuration ; `better-sqlite3` reste un repli.
 - **Saturation de la boucle Node par les agrégations.** Les agrégations tournent dans un `worker_thread`.
 - **Disque plein.** L'installeur pose un quota et une exclusion Defender, et une alarme se lève sous 15 % d'espace libre.
 - **Dérive d'horloge entre sources.** Tout est aligné en UTC, et l'âge et la source de chaque donnée sont affichés.
@@ -176,3 +178,18 @@ Les écrans complets avec l'interface (HUD, rail, console N1, inspecteur, mur 2�
 - [`conseil/0-dossier.md`](conseil/0-dossier.md) : le dossier remis au conseil
 - Tour 1 : [expert supervision](conseil/1-expert-supervision-tour1.md) · [designer UI/UX](conseil/2-designer-uiux-tour1.md) · [directeur artistique](conseil/3-directeur-artistique-tour1.md)
 - Tour 2 : [expert supervision](conseil/4-expert-supervision-tour2.md) · [designer UI/UX](conseil/5-designer-uiux-tour2.md) · [directeur artistique](conseil/6-directeur-artistique-tour2.md)
+
+## 10. Démo interactive
+
+Une démo jouable du nouveau front est servie par l'application. Lancer `SupervisionNG.cmd` (mode démonstration tant que `config\supervisionng.json` n'existe pas) ou `npm run demo`, puis ouvrir `http://localhost:8080/refonte/`. Elle fonctionne hors ligne.
+
+Elle rejoue le scénario `esx-par-08` sur les données du monde de démonstration. Elle montre :
+
+- l'ossature (HUD, rail, bande, lentille Ctrl K) ;
+- la console en 3 tailles, avec la prise en charge commentée ;
+- la vue physique en 3D « Maquette & calques » ;
+- les vues Services, Réseau L2, Virtualisation, Flux et Métrologie, qui partagent la sélection ;
+- la relecture ;
+- le mode mur.
+
+Ses données sont figées : elle ne lit pas encore le flux temps réel du serveur.
