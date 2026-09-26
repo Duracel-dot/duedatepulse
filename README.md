@@ -53,11 +53,16 @@ le sous-dossier `node\`. Rien n'est installé dans Windows.
 **Poste sans accès Internet** : utiliser le paquet hors-ligne, qui embarque `node.exe`
 (artefact **SupervisionNG-win-x64** de la CI GitHub Actions, ou
 `npm run package:win -- --with-node`). S'il est fourni en deux parties
-(`.zip.001` et `.zip.002`), les recomposer dans une invite de commandes :
+(`.zip.001` et `.zip.002`), les recomposer. Dans PowerShell :
 
-```bat
-copy /b SupervisionNG-0.1.0-windows-hors-ligne.zip.001 + SupervisionNG-0.1.0-windows-hors-ligne.zip.002 SupervisionNG-hors-ligne.zip
+```powershell
+cmd /c copy /b SupervisionNG-0.1.0-windows-hors-ligne.zip.001 + SupervisionNG-0.1.0-windows-hors-ligne.zip.002 SupervisionNG-hors-ligne.zip
+Unblock-File .\SupervisionNG-hors-ligne.zip
+Expand-Archive .\SupervisionNG-hors-ligne.zip -DestinationPath .
+.\SupervisionNG\SupervisionNG.cmd
 ```
+
+(Dans une invite de commandes `cmd`, la première ligne s'écrit sans `cmd /c`.)
 
 (7-Zip ouvre aussi directement le fichier `.001`.)
 
