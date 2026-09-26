@@ -12,7 +12,7 @@ export const ROW_B_FRONT = -3.6;             // face avant de la rangée B, tour
  * Construit la maquette. Retourne le groupe `world` et les index des objets sélectionnables.
  * `shadows` : les volumes physiques portent et reçoivent les ombres (la démo spatiale les active).
  */
-export function buildMaquette(THREE, { shadows = false } = {}) {
+export function buildMaquette(THREE, { shadows = false, trays = true } = {}) {
   // ------------------------------------------------------------ utilitaires
   const texCache = new Map();
   const mat = (color, o = {}) => new THREE.MeshStandardMaterial({ color, roughness: 0.86, metalness: 0.05, ...o });
@@ -57,7 +57,8 @@ export function buildMaquette(THREE, { shadows = false } = {}) {
 
   // ------------------------------------------------------------ façades procédurales
   // Représentation schématique : seuls les équipements inventoriés sont dessinés.
-  const FP = { body: '#4A525C', net: '#454D57', stor: '#4C545E', edge: '#1A1E23', ear: '#363C44', screw: '#66707B', vent: '#333941', drive: '#5A636D', driveEdge: '#2E343B', handle: '#7E8894', port: '#131619', portEdge: '#66707B', led: '#808A96', act: '#8A94A0', lcd: '#243344' };
+  // équipements clairs sur obturateurs sombres : on compte les serveurs d'un coup d'œil
+  const FP = { body: '#5F6873', net: '#5A636E', stor: '#636C77', edge: '#1E2227', ear: '#48505A', screw: '#78828D', vent: '#454C55', drive: '#6E7782', driveEdge: '#3A4047', handle: '#8A94A0', port: '#15181C', portEdge: '#6E7883', led: '#8E98A4', act: '#8A94A0', lcd: '#2A3A4C' };
   const PX = 1100; // pixels par mètre
   function faceplate(type, hU) {
     const W = Math.round(INNER_W * PX); const H = Math.max(24, Math.round(hU * U * PX));
@@ -114,9 +115,9 @@ export function buildMaquette(THREE, { shadows = false } = {}) {
   function blankTex(hU) {
     const W = Math.round(INNER_W * PX); const H = Math.round(hU * U * PX);
     return canvasTex(`blank-${hU}`, W, Math.max(8, H), (g) => {
-      g.fillStyle = '#343A42'; g.fillRect(0, 0, W, H);
-      g.fillStyle = '#262B31'; for (let k = 1; k < hU; k++) g.fillRect(0, Math.round(k * (H / hU)) - 1, W, 2);
-      g.fillStyle = '#434A53'; for (let k = 0; k < hU; k++) { const y = (k + 0.5) * (H / hU); g.fillRect(6, y - 2, 4, 4); g.fillRect(W - 10, y - 2, 4, 4); }
+      g.fillStyle = '#23282E'; g.fillRect(0, 0, W, H);
+      g.fillStyle = '#191D21'; for (let k = 1; k < hU; k++) g.fillRect(0, Math.round(k * (H / hU)) - 1, W, 2);
+      g.fillStyle = '#2E343B'; for (let k = 0; k < hU; k++) { const y = (k + 0.5) * (H / hU); g.fillRect(6, y - 2, 4, 4); g.fillRect(W - 10, y - 2, 4, 4); }
     });
   }
   const hatchTex = canvasTex('hatch', 64, 64, (g) => {
@@ -155,7 +156,8 @@ export function buildMaquette(THREE, { shadows = false } = {}) {
 
   // ------------------------------------------------------------ salle
   const world = new THREE.Group();
-  const room = { x0: -2.7, x1: 6.5, z0: -5.7, z1: 2.3 };
+  const room = { x0: -2.7, x1: 6.5, z0: -5.7, z1: 1.4 };
+  const labels = []; // textes posés dans la scène, masqués quand ils deviennent trop petits pour être lus
   const floorTex = tileTex.clone(); floorTex.needsUpdate = true;
   floorTex.repeat.set((room.x1 - room.x0) / 2.4, (room.z1 - room.z0) / 2.4);
   floorTex.offset.set(-room.x0 / 2.4, 0);
@@ -164,8 +166,9 @@ export function buildMaquette(THREE, { shadows = false } = {}) {
   floor.position.set((room.x0 + room.x1) / 2, 0, (room.z0 + room.z1) / 2);
   world.add(floor);
   // socle de maquette : la salle est posée sur une dalle coupée, tranche sombre et arête claire
+  const SL = {};
   {
-    const SL = { x0: room.x0 - 0.22, x1: room.x1 + 0.42, z0: room.z0 - 0.42, z1: room.z1 + 0.22, h: 0.34 };
+    Object.assign(SL, { x0: room.x0 - 0.22, x1: room.x1 + 0.42, z0: room.z0 - 0.42, z1: room.z1 + 0.22, h: 0.46 });
     const slabSide = new THREE.MeshStandardMaterial({ color: '#15191E', roughness: 0.95 });
     const slabTop = new THREE.MeshStandardMaterial({ color: '#1D2229', roughness: 0.95 });
     const slab = new THREE.Mesh(new THREE.BoxGeometry(SL.x1 - SL.x0, SL.h, SL.z1 - SL.z0), [slabSide, slabSide, slabTop, slabSide, slabSide, slabSide]);
@@ -208,7 +211,7 @@ export function buildMaquette(THREE, { shadows = false } = {}) {
     b.position.y = 0.975; g.add(solid(b));
     g.add(at(edges(b.geometry, '#56606B', 0.9), b.position));
     const lab = textPlane(`CLIM ${i}`, { size: 0.16, color: '#8A94A0', spacing: 6 });
-    lab.rotation.x = -Math.PI / 2; lab.position.set(-0.36, 1.952, 0.2); g.add(lab);
+    lab.rotation.x = -Math.PI / 2; lab.position.set(-0.36, 1.952, 0.2); g.add(lab); labels.push({ mesh: lab, size: 0.16 });
     g.position.set(room.x1 - 0.55, 0, z + 0.9); world.add(g);
   }
 
@@ -297,7 +300,7 @@ export function buildMaquette(THREE, { shadows = false } = {}) {
       const roofLab = textPlane(rack.id, { size: 0.15, color: P.inkLight, font: "600 64px 'IBM Plex Mono', monospace" });
       roofLab.rotation.x = -Math.PI / 2;
       roofLab.position.set(x - 0.2, RACK.h + 0.004, (flip ? frontZ + RACK.d / 2 : frontZ - RACK.d / 2) + 0.36);
-      world.add(roofLab);
+      world.add(roofLab); labels.push({ mesh: roofLab, size: 0.15 });
       racks.set(rack.id, { group: g, outline, body, band: { canvas: bandCanvas, tex: bandTex }, anchor, devices: devs, units: rack.units });
     });
   });
@@ -320,9 +323,9 @@ export function buildMaquette(THREE, { shadows = false } = {}) {
     world.add(at(edges(new THREE.BoxGeometry(0.001, RACK.h + 0.05, hotW), '#C9D3DC', 0.28), door.position));
   }
   const hotLab = textPlane('ALLÉE CHAUDE', { size: 0.12, color: '#8A94A0', spacing: 8 });
-  hotLab.rotation.y = -Math.PI / 2; hotLab.position.set(-RACK.w / 2 - 0.01, 1.25, hotZ0 + 0.12); world.add(hotLab);
+  hotLab.rotation.y = -Math.PI / 2; hotLab.position.set(-RACK.w / 2 - 0.01, 1.25, hotZ0 + 0.12); world.add(hotLab); labels.push({ mesh: hotLab, size: 0.12 });
   // chemins de câbles au-dessus des rangées
-  for (const z of [ROW_A_FRONT - 0.35, ROW_B_FRONT + 0.35]) {
+  for (const z of trays ? [ROW_A_FRONT - 0.35, ROW_B_FRONT + 0.35] : []) {
     const tray = box(hotLen + 0.4, 0.06, 0.3, mat('#262C33'));
     tray.position.set(hotLen / 2 - RACK.w / 2, RACK.h + 0.32, z); world.add(solid(tray, true, false));
     world.add(at(edges(tray.geometry, '#4A535E'), tray.position));
@@ -335,5 +338,5 @@ export function buildMaquette(THREE, { shadows = false } = {}) {
     return v;
   }
 
-  return { world, room, titles: [title, sub], pickables, deviceMeshes, racks, rackWorldPos, hotLen, hotZ0, hotZ1, mat, lineMat, edges, box, at, canvasTex, textPlane, hatchTex, glowTex, perfTex };
+  return { world, room, slab: SL, labels, titles: [title, sub], pickables, deviceMeshes, racks, rackWorldPos, hotLen, hotZ0, hotZ1, mat, lineMat, edges, box, at, canvasTex, textPlane, hatchTex, glowTex, perfTex };
 }

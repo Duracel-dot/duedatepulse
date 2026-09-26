@@ -7,7 +7,6 @@ import { WORLD, P, T0, EVENT_BY_ID, ACK_TEMPLATES, stateAt, globalAt, describe, 
 import { buildMaquette, RACK, ROW_A_FRONT, ROW_B_FRONT } from './maquette.js';
 import { LUMINANCE, CHOREGRAPHIE as CH } from './grammaire.js';
 
-const CDN = 'https://cdn.jsdelivr.net/npm/three@0.186.1/build/three.module.js';
 const canvas = document.getElementById('scene');
 const live = document.getElementById('a11y-live');
 const FONTS = ["400 16px 'IBM Plex Sans'", "500 16px 'IBM Plex Sans'", "600 16px 'IBM Plex Sans'", "400 16px 'IBM Plex Mono'", "500 16px 'IBM Plex Mono'", "600 16px 'IBM Plex Sans Condensed'", "700 16px 'IBM Plex Sans Condensed'"];
@@ -15,10 +14,13 @@ const SANS = "'IBM Plex Sans', 'Segoe UI', sans-serif";
 const MONO = "'IBM Plex Mono', Consolas, monospace";
 const COND = "'IBM Plex Sans Condensed', 'Segoe UI', sans-serif";
 
-let THREE;
+let THREE; let Fat;
 try {
   await Promise.race([Promise.all(FONTS.map((f) => document.fonts?.load(f))), new Promise((r) => setTimeout(r, 2000))]).catch(() => {});
-  THREE = await import(document.querySelector('meta[name="sng-three"]')?.content || CDN);
+  // la table d'import de la page désigne three.js (copie locale sur le poste, CDN pour la démo en ligne)
+  THREE = await import('three');
+  const [a, b, c] = await Promise.all(['LineSegments2', 'LineSegmentsGeometry', 'LineMaterial'].map((f) => import(`three/addons/lines/${f}.js`)));
+  Fat = { Segs: a.LineSegments2, Geo: b.LineSegmentsGeometry, Mat: c.LineMaterial };
 } catch (err) {
   console.error(err);
   const fb = document.getElementById('fallback');
@@ -64,20 +66,41 @@ let shadowDirty = true;
 const scene = new THREE.Scene();
 const camera = new THREE.OrthographicCamera(-1, 1, 1, -1, -200, 300);
 // éclairage de maquette : lumière principale haute à gauche qui porte les ombres, débouchage froid, contre-jour
-scene.add(new THREE.HemisphereLight(0xC9D6E3, 0x0B0D10, 1.5));
-const sun = new THREE.DirectionalLight(0xFFF6EA, 3.4); sun.position.set(-4.5, 11, 7.5);
+scene.add(new THREE.HemisphereLight(0xC9D6E3, 0x0B0D10, 1.1));
+const sun = new THREE.DirectionalLight(0xFFF6EA, 3.6); sun.position.set(0, 11, 3.8);
 sun.target.position.set(2.5, 0, -1.7); scene.add(sun, sun.target);
 sun.castShadow = true; sun.shadow.mapSize.set(2048, 2048); sun.shadow.bias = -0.0004; sun.shadow.normalBias = 0.015; sun.shadow.radius = 3;
 Object.assign(sun.shadow.camera, { left: -8, right: 8, top: 8, bottom: -8, near: 1, far: 30 });
-const fillL = new THREE.DirectionalLight(0x8FA8C4, 0.8); fillL.position.set(9, 4, -6); scene.add(fillL);
-const rimL = new THREE.DirectionalLight(0xB8C7D6, 0.45); rimL.position.set(2, 6, -14); scene.add(rimL);
-const frontL = new THREE.DirectionalLight(0xDDE6EF, 1.5); frontL.position.set(-5, 2.5, 9); scene.add(frontL);
+const fillL = new THREE.DirectionalLight(0x8FA8C4, 0.35); fillL.position.set(9, 4, -6); scene.add(fillL);
 
-const K = buildMaquette(THREE, { shadows: true });
+const K = buildMaquette(THREE, { shadows: true, trays: false }); // chemins de câbles retirés : ils barraient les toits (marge)
 scene.add(K.world);
 for (const t of K.titles) t.visible = false; // la légende reprend le titre de la salle
 const { deviceMeshes, racks, rackWorldPos, edges, textPlane, at } = K;
 const pickables = [...K.pickables];
+const worldTexts = [...K.labels];
+let textPx = 0;
+function applyTextLod(ppw) {
+  const min = S.mur ? 18 : 11; const key = Math.round(ppw * 4) + (S.mur ? 100000 : 0);
+  if (key === textPx) return; textPx = key;
+  for (const t of worldTexts) t.mesh.visible = t.size * 0.55 * ppw >= min;
+}
+
+// ------------------------------------------------------------ traits épais : WebGL ignore l'épaisseur des lignes (1 px)
+const fatMats = new Set();
+function fatMat(color, px, opacity = 1) {
+  const m = new Fat.Mat({ color: new THREE.Color(color), linewidth: px, transparent: opacity < 1, opacity, depthWrite: false });
+  m.resolution.set(canvas.clientWidth || 1, canvas.clientHeight || 1); fatMats.add(m); return m;
+}
+const UNIT_EDGES = new THREE.EdgesGeometry(new THREE.BoxGeometry(1, 1, 1)).attributes.position.array;
+function fatBox(color, px, opacity = 1) { const g = new Fat.Geo(); g.setPositions(UNIT_EDGES); return new Fat.Segs(g, fatMat(color, px, opacity)); }
+function fatLines(color, px, opacity = 1) { const l = new Fat.Segs(new Fat.Geo(), fatMat(color, px, opacity)); l.visible = false; l.frustumCulled = false; return l; }
+function setFat(line, pts) {
+  line.geometry.dispose(); const g = new Fat.Geo();
+  if (pts.length) { const arr = new Float32Array(pts.length * 3); pts.forEach((p, i) => { arr[i * 3] = p.x; arr[i * 3 + 1] = p.y; arr[i * 3 + 2] = p.z; }); g.setPositions(arr); }
+  line.geometry = g; line.visible = pts.length > 0;
+}
+function disposeGroup(grp) { for (const o of grp.children) { o.geometry?.dispose(); if (o.material) { o.material.dispose(); fatMats.delete(o.material); } } grp.clear(); }
 
 // ------------------------------------------------------------ petits outils de dessin
 function canvasTexture(w, h) {
@@ -111,12 +134,13 @@ function segLine(x1, z1, x2, z2, y, { dash = 0, gap = 0 } = {}) {
 }
 function rectSegs(x0, z0, x1, z1, y, o) { return [...segLine(x0, z0, x1, z0, y, o), ...segLine(x1, z0, x1, z1, y, o), ...segLine(x1, z1, x0, z1, y, o), ...segLine(x0, z1, x0, z0, y, o)]; }
 const inkMat = (color) => new THREE.MeshBasicMaterial({ color, side: THREE.DoubleSide });
-const softShadowTex = K.canvasTex('soft-shadow', 128, 128, (g) => { g.filter = 'blur(10px)'; g.fillStyle = 'rgba(6,8,11,0.85)'; g.fillRect(22, 22, 84, 84); });
-const softShadowMat = new THREE.MeshBasicMaterial({ map: softShadowTex, transparent: true, depthWrite: false, opacity: 0.7 });
-/** Ombre portée factice sous un objet d'une strate, décalée à l'opposé de la lumière principale. */
-function dropShadow(parent, x, z, w, d, y = -0.006) {
-  const m = new THREE.Mesh(new THREE.PlaneGeometry(w * 1.5, d * 1.5), softShadowMat);
-  m.rotation.x = -Math.PI / 2; m.position.set(x + 0.05, y, z - 0.06); m.renderOrder = -1; parent.add(m); return m;
+// Coque sombre (face arrière d'une boîte agrandie) : un liseré opaque détache chaque objet logique des baies
+// et des traits vus au travers, sans aucun voile translucide.
+const hullMat = new THREE.MeshBasicMaterial({ color: '#0D1014', side: THREE.BackSide });
+function addHull(mesh, grow = 0.05) {
+  const p = mesh.geometry.parameters;
+  const h = new THREE.Mesh(new THREE.BoxGeometry(p.width + grow, p.height + grow * 0.5, p.depth + grow), hullMat);
+  mesh.add(h); return h;
 }
 /** Contour doublé : double = redondance tenue ; extérieur tireté = mince ; trait simple épais = perdue. */
 function doubleOutline(parent, x0, z0, x1, z1, y, { gap = 0.05, color = '#8A94A0', w = 0.016 } = {}) {
@@ -171,10 +195,10 @@ STRATA.forEach((s, i) => {
   for (let x = FOOT.x0 + 0.3; x < FOOT.x1; x += 0.6) for (let z = FOOT.z0 + 0.25; z < FOOT.z1; z += 0.6) dots.push(x, 0, z);
   const dg = new THREE.BufferGeometry(); dg.setAttribute('position', new THREE.Float32BufferAttribute(dots, 3));
   g.add(new THREE.Points(dg, new THREE.PointsMaterial({ color: '#4E5762', size: 2.2, sizeAttenuation: false })));
-  g.add(new THREE.Mesh(quadGeo(bracketSegs(FOOT.x0, FOOT.z0, FOOT.x1, FOOT.z1, 0.001, 0.36, 0.07), 0.034), inkMat('#C9D3DC')));
+  g.add(new THREE.Mesh(quadGeo(bracketSegs(FOOT.x0, FOOT.z0, FOOT.x1, FOOT.z1, 0.001, 0.36, 0.07), 0.034), inkMat('#8A94A0')));
   layers[s.id] = { group: g, sheetMat };
 });
-scene.add(new THREE.Mesh(quadGeo(bracketSegs(FOOT.x0, FOOT.z0, FOOT.x1, FOOT.z1, 0.006, 0.36, 0.07), 0.034), inkMat('#8A94A0')));
+scene.add(new THREE.Mesh(quadGeo(bracketSegs(FOOT.x0, FOOT.z0, FOOT.x1, FOOT.z1, 0.006, 0.36, 0.07), 0.034), inkMat('#6E7883')));
 layers.physique = {};
 // montants d'angle : les quatre strates se lisent comme les étages d'une même maquette
 const posts = new THREE.Group(); scene.add(posts);
@@ -203,7 +227,7 @@ const netMat = (color = NET_BASE) => new THREE.MeshStandardMaterial({ color, rou
 for (const d of netDevices) {
   const m = netMat(); const mesh = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.07, 0.12), m);
   const pos = netNodePos(d); mesh.position.copy(pos).setY(0.035); mesh.userData = { id: d.id };
-  mesh.add(at(edges(mesh.geometry, '#8A94A0', 0.5), new THREE.Vector3()));
+  mesh.add(at(edges(mesh.geometry, '#8A94A0', 0.5), new THREE.Vector3())); addHull(mesh, 0.04);
   layers.reseau.group.add(mesh); pickables.push(mesh);
   netNodes.set(d.id, { mesh, mat: m, pos });
 }
@@ -212,13 +236,13 @@ for (const e of EXT) {
   const m = netMat(NET_EXT); const mesh = new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.15, 0.06, 40), m);
   mesh.position.copy(e.pos).setY(0.03); mesh.userData = { id: e.id }; layers.reseau.group.add(mesh); pickables.push(mesh);
   const lab = textPlane(e.name, { size: 0.12, color: '#AEB6BF', font: "500 64px 'IBM Plex Mono', monospace" });
-  lab.rotation.x = -Math.PI / 2; lab.position.set(e.pos.x - 0.2, 0.004, e.pos.z + 0.28); layers.reseau.group.add(lab);
+  lab.rotation.x = -Math.PI / 2; lab.position.set(e.pos.x - 0.2, 0.004, e.pos.z + 0.28); layers.reseau.group.add(lab); worldTexts.push({ mesh: lab, size: 0.12 });
   netNodes.set(e.id, { mesh, mat: m, pos: e.pos });
 }
 for (const id of ['core-par-1', 'fw-par-1', 'rtr-par-1']) {
   const n = netNodes.get(id);
   const lab = textPlane(id.replace('-1', '-1/2'), { size: 0.085, color: '#AEB6BF', font: "500 64px 'IBM Plex Mono', monospace" });
-  lab.rotation.x = -Math.PI / 2; lab.position.set(n.pos.x + 0.26, 0.004, n.pos.z + 0.04); layers.reseau.group.add(lab);
+  lab.rotation.x = -Math.PI / 2; lab.position.set(n.pos.x + 0.26, 0.004, n.pos.z + 0.04); layers.reseau.group.add(lab); worldTexts.push({ mesh: lab, size: 0.085 });
 }
 // voies : l'épaisseur dit la capacité nominale (dessin, jamais un état) ; le double trait dit la redondance
 const TRUNK_Z = (ROW_A_FRONT - RACK.d + ROW_B_FRONT + RACK.d) / 2;
@@ -295,10 +319,10 @@ for (const h of WORLD.hosts) {
   const mesh = new THREE.Mesh(new THREE.BoxGeometry(0.5, HOST.h, 0.44), mat);
   mesh.position.copy(pos).setY(HOST.h / 2); mesh.userData = { id: h.id };
   layers.virtualisation.group.add(mesh); pickables.push(mesh);
-  dropShadow(layers.virtualisation.group, pos.x, pos.z, 0.5, 0.44);
+  addHull(mesh, 0.05);
   const rim = edges(mesh.geometry, HOST.rim, 0.9); rim.position.copy(mesh.position); layers.virtualisation.group.add(rim);
   const lab = textPlane(h.id, { size: 0.05, color: '#AEB6BF', font: "500 64px 'IBM Plex Mono', monospace" });
-  lab.rotation.x = -Math.PI / 2; lab.position.set(pos.x - 0.23, HOST.h + 0.002, pos.z + 0.185); layers.virtualisation.group.add(lab);
+  lab.rotation.x = -Math.PI / 2; lab.position.set(pos.x - 0.23, HOST.h + 0.002, pos.z + 0.185); layers.virtualisation.group.add(lab); worldTexts.push({ mesh: lab, size: 0.05 });
   hostTiles.set(h.id, { mesh, mat, rim, pos });
 }
 for (const cl of ['CL-PROD-PAR', 'HVCL-PAR']) {
@@ -309,7 +333,7 @@ for (const cl of ['CL-PROD-PAR', 'HVCL-PAR']) {
   const rowB = pts.every((p) => p.z < -2);
   const lab = textPlane(cl, { size: 0.15, color: '#DDE1E6', spacing: 8 });
   lab.rotation.x = -Math.PI / 2; lab.position.set(box.x0 + 0.02, 0.005, rowB ? box.z0 - 0.12 : box.z1 + 0.16); lab.userData = { id: cl };
-  layers.virtualisation.group.add(lab); pickables.push(lab);
+  layers.virtualisation.group.add(lab); pickables.push(lab); worldTexts.push({ mesh: lab, size: 0.15 });
   clusterObjs.push({ id: cl, outline, lab, box });
 }
 const vmGeo = new THREE.BoxGeometry(VM.w, VM.h, VM.d);
@@ -360,7 +384,7 @@ function buildServices() {
     const mesh = new THREE.Mesh(new THREE.BoxGeometry(PAD.w, PAD.h, PAD.d), [side, side, top, side, side, side]);
     mesh.position.set(it.x, PAD.h / 2, it.z); mesh.userData = { id: it.id };
     mesh.add(at(edges(mesh.geometry, '#58616C', 0.9), new THREE.Vector3()));
-    dropShadow(layers.services.group, it.x, it.z, PAD.w, PAD.d);
+    addHull(mesh, 0.06);
     layers.services.group.add(mesh); pickables.push(mesh);
     svcPads.set(it.id, { mesh, top, tex: t, canvas: c, pos: new THREE.Vector3(it.x, 0, it.z), sig: '' });
   }
@@ -381,8 +405,8 @@ function drawPad(id) {
   const hue = st === 'down' ? P.critical : null;
   g.clearRect(0, 0, W, H);
   const face = g.createLinearGradient(0, 0, 0, H);
-  const base = st === 'down' ? '#34201F' : marge ? LUMINANCE[marge] : '#262C34';
-  face.addColorStop(0, base); face.addColorStop(1, st === 'down' ? '#2A1A1A' : marge ? LUMINANCE[marge] : '#20252C');
+  const base = marge ? LUMINANCE[marge] : '#262C34';
+  face.addColorStop(0, base); face.addColorStop(1, marge ? LUMINANCE[marge] : '#20252C');
   g.fillStyle = face; g.fillRect(0, 0, W, H);
   if (marge) { g.fillStyle = 'rgba(18,22,28,0.5)'; g.fillRect(0, 0, W, H); }
   // double trait = redondance
@@ -394,7 +418,6 @@ function drawPad(id) {
     g.fillStyle = hue ? P.ivory : '#E4E8EC'; g.font = `600 72px ${SANS}`; g.fillText(svcName(id), 52, 140, W - 150);
     g.fillStyle = marge ? P.inkLight : '#98A2AD'; g.font = `400 44px ${MONO}`; g.fillText(sub, 52, 236, W - 90);
   }
-  if (st === 'down') drawGlyph(g, 1, W - 70, 86, 28);
   p.tex.needsUpdate = true;
   p.top.color.set(dim ? '#B3B3B3' : '#FFFFFF');
 }
@@ -402,7 +425,7 @@ function drawPad(id) {
 // ------------------------------------------------------------ signaux d'état global dans l'espace
 const globalGroup = new THREE.Group(); scene.add(globalGroup);
 // plinthe de la salle : synthèse de la redondance, lisible de loin
-const plinth = doubleOutline(scene, K.room.x0 + 0.1, K.room.z0 + 0.1, K.room.x1 - 0.1, K.room.z1 - 0.1, 0.012, { gap: 0.09, color: '#5A636E', w: 0.022 });
+const plinth = doubleOutline(scene, K.room.x0 + 0.1, K.room.z0 + 0.1, K.room.x1 - 0.1, K.room.z1 - 0.1, 0.012, { gap: 0.09, color: '#56606B', w: 0.022 });
 // pied de la baie B08 (onduleurs, voies électriques)
 const b08 = rackWorldPos('B08');
 const upsPlinth = doubleOutline(scene, b08.x - 0.36, b08.z - 0.66, b08.x + 0.36, b08.z + 0.66, 0.014, { gap: 0.04, color: '#5A636E' });
@@ -421,14 +444,14 @@ function buildScaffold(id, avancement) {
   scaffold.clear();
   const p = svcPads.get(id); if (!p) return;
   const x0 = p.pos.x - PAD.w / 2 - 0.05; const x1 = p.pos.x + PAD.w / 2 + 0.05; const z0 = p.pos.z - PAD.d / 2 - 0.05; const z1 = p.pos.z + PAD.d / 2 + 0.05; const h = 0.24;
-  const ink = new THREE.MeshBasicMaterial({ color: '#C9D0D8' });
+  const ink = new THREE.MeshBasicMaterial({ color: '#8A94A0' });
   const postGeo = new THREE.BoxGeometry(0.014, h, 0.014);
   for (const [x, z] of [[x0, z0], [x1, z0], [x1, z1], [x0, z1]]) { const m = new THREE.Mesh(postGeo, ink); m.position.set(x, h / 2, z); scaffold.add(m); }
   for (const y of [h * 0.5, h]) scaffold.add(new THREE.Mesh(quadGeo(rectSegs(x0, z0, x1, z1, y), 0.014), ink));
   // une graduation par instance : pleine = mise à jour, sombre = à faire
   const n = 10; const done = Math.round(avancement * n); const seg = (x1 - x0) / n;
   for (let i = 0; i < n; i++) {
-    const tick = new THREE.Mesh(new THREE.BoxGeometry(seg - 0.022, 0.035, 0.05), new THREE.MeshBasicMaterial({ color: i < done ? P.ivory : '#2A313B' }));
+    const tick = new THREE.Mesh(new THREE.BoxGeometry(seg - 0.022, 0.035, 0.05), new THREE.MeshBasicMaterial({ color: i < done ? '#AEB6BF' : '#2A313B' }));
     tick.position.set(x0 + (i + 0.5) * seg, h + 0.03, z0); scaffold.add(tick);
   }
 }
@@ -436,8 +459,8 @@ function buildScaffold(id, avancement) {
 // ------------------------------------------------------------ racines, fils à plomb et traçage
 const faintMat = new THREE.LineBasicMaterial({ color: '#8A94A0', transparent: true, opacity: 0.13, depthWrite: false });
 const faintLines = new THREE.LineSegments(new THREE.BufferGeometry(), faintMat); scene.add(faintLines);
-const hiLines = new THREE.LineSegments(new THREE.BufferGeometry(), new THREE.LineBasicMaterial({ color: P.ivory, transparent: true, opacity: 0.85, depthWrite: false })); scene.add(hiLines);
-const traceLines = new THREE.LineSegments(new THREE.BufferGeometry(), new THREE.LineBasicMaterial({ color: P.ivory, transparent: true, opacity: 0.6, depthWrite: false })); scene.add(traceLines);
+const hiLines = fatLines(P.ivory, 2, 0.9); scene.add(hiLines);
+const traceLines = fatLines(P.ivory, 1.6, 0.7); scene.add(traceLines);
 
 function worldOfDevice(id) { const dm = deviceMeshes.get(id); if (!dm) return null; const v = new THREE.Vector3(); dm.anchor.getWorldPosition(v); return v; }
 function worldOf(id) {
@@ -521,12 +544,12 @@ function layoutCards(pxPerWorld, right, up) {
         if (!hit) break;
         dy += (ry - dy + c.h * sc) - hit.y + 6;
       }
-      if (c.optional && dy > 0) { c.mesh.visible = c.line.visible = false; continue; }
+      if (c.optional && dy > 16) { c.mesh.visible = c.line.visible = false; continue; }
     }
     // un cartel ne sort jamais de l'écran : il glisse contre le bord, sa ligne de rappel reste attachée à l'objet
     const cw = c.w * sc; const ch = c.h * sc;
     let x = c.screen ? rx : Math.min(Math.max(rx, 8), W - cw - 8); let y = c.screen ? ry - dy : Math.min(Math.max(ry - dy, 8), H - ch - 8);
-    if (c.fixed) { x = c.fixed[0] * sc; y = c.fixed[1] * sc; }
+    if (c.fixed) { const f = typeof c.fixed === 'function' ? c.fixed(W, H, sc) : [c.fixed[0] * sc, c.fixed[1] * sc]; x = f[0]; y = f[1]; }
     if (c.optional && (x !== rx || y !== ry - dy)) { c.mesh.visible = c.line.visible = false; continue; }
     c.mesh.visible = true; c.line.visible = !c.screen && !c.noLeader;
     placed.push({ x, y, w: cw, h: ch });
@@ -595,6 +618,9 @@ const strataTabs = STRATA.map((s, i) => {
 function drawStrataTabs() {
   for (const c of strataTabs) {
     const on = S.stratum === c.stratum;
+    const mg = c.canvas.getContext('2d'); mg.font = `600 14px ${COND}`; mg.letterSpacing = '3px';
+    const tw = Math.ceil(mg.measureText(SBY[c.stratum].label).width) + 64; mg.letterSpacing = '0px';
+    c.resize(tw, 28); c.offset = [-tw - 6, -14];
     c.draw((g, w, h, card) => {
       g.textBaseline = 'middle'; g.textAlign = 'right';
       g.font = `600 14px ${COND}`; g.letterSpacing = '3px';
@@ -675,28 +701,28 @@ function paintBoard(g) {
 }
 
 // ============================================================ règle du temps au sol (relecture)
-const RULE = { x0: 0.3, x1: K.room.x1 - 0.5, z: K.room.z1 - 0.5, span: 86400 };
+const RULE = { x0: K.slab.x0 + 1.2, x1: K.slab.x1 - 0.5, y: -0.13, z: K.slab.z1 + 0.004, span: 86400 };
 const ruleX = (age) => RULE.x1 - (RULE.x1 - RULE.x0) * Math.log1p(Math.max(0, age) / 60) / Math.log1p(RULE.span / 60);
 const ruleAge = (x) => Math.expm1(((RULE.x1 - Math.min(RULE.x1, Math.max(RULE.x0, x))) / (RULE.x1 - RULE.x0)) * Math.log1p(RULE.span / 60)) * 60;
 const rule = new THREE.Group(); scene.add(rule);
-const ruleMat = new THREE.MeshStandardMaterial({ color: '#2A313B' });
-const ruleBar = new THREE.Mesh(new THREE.BoxGeometry(RULE.x1 - RULE.x0, 0.01, 0.07), ruleMat);
-ruleBar.position.set((RULE.x0 + RULE.x1) / 2, 0.005, RULE.z); ruleBar.userData = { id: 'rule' }; rule.add(ruleBar); pickables.push(ruleBar);
+const ruleMat = new THREE.MeshStandardMaterial({ color: '#3A414A' });
+const ruleBar = new THREE.Mesh(new THREE.BoxGeometry(RULE.x1 - RULE.x0, 0.035, 0.014), ruleMat);
+ruleBar.position.set((RULE.x0 + RULE.x1) / 2, RULE.y, RULE.z + 0.007); ruleBar.userData = { id: 'rule' }; rule.add(ruleBar); pickables.push(ruleBar);
 for (const [age, label] of [[0, 'maintenant'], [300, '−5 min'], [3600, '−1 h'], [21600, '−6 h'], [86400, '−24 h']]) {
   const x = ruleX(age);
-  const tick = new THREE.Mesh(new THREE.BoxGeometry(0.012, 0.012, 0.16), new THREE.MeshBasicMaterial({ color: '#5A636E' })); tick.position.set(x, 0.008, RULE.z); rule.add(tick);
-  const lab = textPlane(label, { size: 0.1, color: '#5A636E', font: "400 64px 'IBM Plex Mono', monospace" }); lab.rotation.x = -Math.PI / 2; lab.position.set(x - 0.04, 0.006, RULE.z + 0.2); rule.add(lab);
+  const tick = new THREE.Mesh(new THREE.BoxGeometry(0.014, 0.1, 0.012), new THREE.MeshBasicMaterial({ color: '#6E7883' })); tick.position.set(x, RULE.y, RULE.z + 0.006); rule.add(tick);
+  const lab = textPlane(label, { size: 0.15, color: '#8A94A0', font: "400 64px 'IBM Plex Mono', monospace" }); lab.position.set(x - 0.03, RULE.y - 0.16, RULE.z + 0.003); rule.add(lab);
 }
-// repères d'événements à l'encre : une couleur d'alarme au sol imiterait une alarme active
+// repères d'événements à l'encre : une couleur d'alarme sur la règle imiterait une alarme active
 for (const e of EVENT_BY_ID.values()) {
   if (e.group || e.start < -RULE.span) continue;
-  const m = new THREE.Mesh(new THREE.BoxGeometry(0.016, 0.02, 0.09), new THREE.MeshBasicMaterial({ color: '#8A94A0' })); m.position.set(ruleX(-e.start), 0.012, RULE.z - 0.1); rule.add(m);
+  const m = new THREE.Mesh(new THREE.BoxGeometry(0.018, 0.05, 0.012), new THREE.MeshBasicMaterial({ color: '#8A94A0' })); m.position.set(ruleX(-e.start), RULE.y + 0.075, RULE.z + 0.006); rule.add(m);
 }
-const knob = new THREE.Mesh(new THREE.BoxGeometry(0.09, 0.07, 0.22), new THREE.MeshStandardMaterial({ color: P.inkLight }));
-knob.position.set(RULE.x1, 0.035, RULE.z); knob.userData = { id: 'knob' }; rule.add(knob); pickables.push(knob);
+const knob = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.2, 0.05), new THREE.MeshStandardMaterial({ color: P.inkLight }));
+knob.position.set(RULE.x1, RULE.y, RULE.z + 0.025); knob.userData = { id: 'knob' }; rule.add(knob); pickables.push(knob);
 const replayFrame = new THREE.Mesh(quadGeo(rectSegs(K.room.x0 + 0.04, K.room.z0 + 0.04, K.room.x1 - 0.04, K.room.z1 - 0.04, 0.02), 0.03), inkMat(P.temporal));
 replayFrame.visible = false; scene.add(replayFrame);
-function placeKnob() { knob.position.x = ruleX(S.replay ? nowT() - S.replay.t : 0); knob.material.color.set(S.replay ? P.temporal : P.inkLight); ruleMat.color.set(S.replay ? '#3A2E52' : '#2A313B'); replayFrame.visible = !!S.replay; }
+function placeKnob() { knob.position.x = ruleX(S.replay ? nowT() - S.replay.t : 0); knob.material.color.set(S.replay ? P.temporal : P.inkLight); ruleMat.color.set(S.replay ? '#4A3A68' : '#3A414A'); replayFrame.visible = !!S.replay; }
 
 // ============================================================ onde, tiroir
 const pulses = [];
@@ -737,7 +763,7 @@ const ROOM_BOX = new THREE.Box3(new THREE.Vector3(-3.8, 0, -6.4), new THREE.Vect
 function contentPoints(e = S.explodeTarget, extra = []) {
   const pts = []; const add = (x, y, z) => pts.push(new THREE.Vector3(x, y, z));
   const r = K.room;
-  for (const x of [r.x0 - 0.22, r.x1 + 0.42]) for (const z of [r.z0 - 0.42, r.z1 + 0.22]) { add(x, -0.34, z); add(x, 0, z); }
+  const sl = K.slab; for (const x of [sl.x0, sl.x1]) for (const z of [sl.z0, sl.z1]) { add(x, -sl.h, z); add(x, 0, z); }
   add(r.x0, 1.4, r.z0 - 0.2); add(r.x1 + 0.2, 1.4, r.z0 - 0.2); add(r.x1 + 0.2, 1.4, r.z1); add(r.x1 - 0.1, 1.95, -0.6);
   for (const s of STRATA.slice(1)) { const y = strataY(s.id, e) + 0.12; for (const x of [FOOT.x0 - 0.1, FOOT.x1 + 0.1]) for (const z of [FOOT.z0 - 0.1, FOOT.z1 + 0.45]) add(x, y, z); }
   add(STAND.x, 0, STAND.z);
@@ -775,7 +801,7 @@ function dist() { const [a, b] = [...pointers.values()]; return a && b ? Math.hy
 canvas.addEventListener('pointermove', (e) => {
   if (S.mur) return;
   if (pointers.has(e.pointerId)) pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
-  if (drag?.mode === 'rule') { const hit = pickPlaneY(e, 0.01); if (hit) scrub(hit); return; }
+  if (drag?.mode === 'rule') { const hit = pickPlaneZ(e, RULE.z); if (hit) scrub(hit); return; }
   if (drag) {
     if (pointers.size === 2 && drag.pinch) { const d = dist(); view.zoom = Math.min(8, Math.max(0.45, view.zoom * d / drag.pinch)); drag.pinch = d; anim = null; invalidate(); return; }
     const dx = e.clientX - drag.x; const dy = e.clientY - drag.y;
@@ -806,6 +832,7 @@ function pick(e) {
   if (id === 'board') { const py = (1 - best.uv.y) * BOARD.h; const row = boardRows.find((r) => py >= r.y0 && py <= r.y1); return { id: row ? row.ev.obj : null, board: row?.ev, point: best.point }; }
   return { id, point: best.point };
 }
+function pickPlaneZ(e, z) { ray.setFromCamera(ndc(e), camera); const pt = new THREE.Vector3(); return ray.ray.intersectPlane(new THREE.Plane(new THREE.Vector3(0, 0, 1), -z), pt) ? pt : null; }
 function pickPlaneY(e, y) { ray.setFromCamera(ndc(e), camera); const pt = new THREE.Vector3(); return ray.ray.intersectPlane(new THREE.Plane(new THREE.Vector3(0, 1, 0), -y), pt) ? pt : null; }
 let hoverQ = null;
 function queueHover(e) { if (hoverQ) { hoverQ = e; return; } hoverQ = e; requestAnimationFrame(() => { const ev = hoverQ; hoverQ = null; const h = pick(ev); setHover(h && !h.card && h.id && !h.id.startsWith('strate:') && !['rule', 'knob', 'board'].includes(h.id) ? h.id : null); canvas.style.cursor = h?.action || h?.id || h?.board ? 'pointer' : 'grab'; }); }
@@ -920,8 +947,8 @@ function refreshHighlight() {
   const focus = S.focusEvent ? state.roots.find((r) => r.id === S.focusEvent) : null;
   const redC = focus ? chainOf(focus.obj) : { ids: new Set(), segs: [] };
   hl = { sel: selC.ids, red: redC.ids, hover: hovC.ids };
-  setLines(hiLines, [...selC.segs, ...hovC.segs]);
-  setLines(traceLines, redC.segs);
+  setFat(hiLines, [...selC.segs, ...hovC.segs]);
+  setFat(traceLines, redC.segs);
   for (const [id, t] of vmTiles) if (t.base) t.mat.color.copy(t.base).multiplyScalar(dimmed(id) ? 0.7 : 1);
   for (const [id, t] of hostTiles) if (!gl(glob.marge, id) && state.obj.get(id) !== 'root') t.mat.color.set(dimmed(id) ? HOST.dim : HOST.base);
   for (const [id, n] of netNodes) if (!state.obj.has(id) && !gl(glob.marge, id)) n.mat.color.set(dimmed(id) ? NET_DIM : id.startsWith('ext-') ? NET_EXT : NET_BASE);
@@ -932,9 +959,12 @@ function refreshHighlight() {
   const stO = S.sel && (deviceMeshes.get(S.sel)?.mesh || racks.get(S.sel)?.body); if (stO) { placeBox(selBox, new THREE.Box3().setFromObject(stO), 0.02); selBox.visible = true; }
   invalidate();
 }
-const hoverBox = edges(new THREE.BoxGeometry(1, 1, 1), P.ivory, 0.8); hoverBox.visible = false; scene.add(hoverBox);
-const selBox = edges(new THREE.BoxGeometry(1, 1, 1), P.ivory, 1); selBox.visible = false; scene.add(selBox);
+const hoverBox = fatBox(P.ivory, 1.5, 0.85); hoverBox.visible = false; scene.add(hoverBox);
+const selBox = fatBox(P.ivory, 2.5); selBox.visible = false; scene.add(selBox);
 const stateBoxes = new THREE.Group(); scene.add(stateBoxes);
+const stateBoxMap = new Map(); // id → contour d'état (suit le tiroir)
+const rootCaps = new THREE.Group(); scene.add(rootCaps);
+let rootVisuals = []; // objets de la cause P1 dont la luminance bat à 1 Hz
 function placeBox(o, b3, pad) { const s = new THREE.Vector3(); const c = new THREE.Vector3(); b3.getSize(s); b3.getCenter(c); o.position.copy(c); o.scale.set(s.x + pad, s.y + pad, s.z + pad); }
 
 function isolate(id) {
@@ -996,8 +1026,16 @@ function updateAlarmCards() {
     const mode = primary?.id === r.id ? 'full' : 'pin';
     let c = alarmCards.get(r.id);
     const col = r.prio === 1 ? P.critical : P.major;
-    const anchor = () => { const w = worldOfDevice(r.obj) || rackWorldPos(r.obj); return w ? new THREE.Vector3(w.x, strataY('services') + 0.8, w.z) : null; };
-    if (!c) { c = mode === 'full' ? new Card({ w: 360, h: 76, anchor, offset: [18, 10], leader: '#8A94A0', id: r.obj, prio: 2 }) : new Card({ w: 56, h: 30, anchor, offset: [8, 6], leader: '#5A636E', id: r.obj, prio: 4 }); c.mode = mode; alarmCards.set(r.id, c); }
+    // cartel principal : gouttière en haut à droite, sa ligne de rappel part de l'équipement lui-même ;
+    // épingles : posées sur le toit de la baie concernée
+    const anchor = mode === 'full'
+      ? () => worldOfDevice(r.obj) || (racks.has(r.obj) ? rackWorldPos(r.obj).setY(RACK.h) : null)
+      : () => { const w = worldOfDevice(r.obj) || rackWorldPos(r.obj); return w ? new THREE.Vector3(w.x, RACK.h + 0.05, w.z) : null; };
+    if (!c) {
+      c = mode === 'full' ? new Card({ w: 360, h: 76, anchor, offset: [18, 10], leader: '#8A94A0', id: r.obj, prio: 2 }) : new Card({ w: 56, h: 30, anchor, offset: [8, 6], leader: '#5A636E', id: r.obj, prio: 4 });
+      if (mode === 'full') c.fixed = (W, H, sc) => [W - c.w * sc - 20 * sc, 20 * sc];
+      c.mode = mode; alarmCards.set(r.id, c);
+    }
     const n = numbered.indexOf(r) + 1;
     const blinkOff = r.prio === 1 && !S.replay && !S.storm && !blinkOn;
     if (mode === 'pin') { c.draw((g, w, h, card) => { panel(g, w, h, col); drawGlyph(g, r.prio, 16, 15, 7, { dim: blinkOff }); g.fillStyle = P.ivory; g.font = `500 14px ${MONO}`; g.fillText(String(n), 30, 20); card.hits.push({ x: 0, y: 0, w, h, action: `open:${r.id}` }); }); continue; }
@@ -1107,44 +1145,64 @@ function update(force = false) {
   if (selCard) drawSelCard();
 }
 function applyStateVisuals() {
+  scene.updateMatrixWorld(true); // boîtes calculées sur des matrices à jour (sinon décalées d'une baie)
+  rootVisuals = [];
+  disposeGroup(rootCaps);
   for (const [id, dm] of deviceMeshes) {
     const st = state.obj.get(id);
-    dm.material.emissive.set(st === 'root' ? P.critical : 0x000000); dm.material.emissiveIntensity = st === 'root' ? 0.3 : 0;
+    dm.material.emissive.set(st === 'root' ? P.critical : 0x000000); dm.material.emissiveIntensity = st === 'root' ? 1 : 0;
     dm.material.color.set(st === 'maint' ? '#8A94A0' : '#ffffff');
+    if (st === 'root') {
+      rootVisuals.push({ id, kind: 'device', mat: dm.material });
+      const c = rackWorldPos(dm.rack);
+      const cap = new THREE.Mesh(new THREE.BoxGeometry(RACK.w + 0.02, 0.035, RACK.d + 0.02), new THREE.MeshBasicMaterial({ color: P.critical }));
+      cap.position.set(c.x, RACK.h + 0.02, c.z); rootCaps.add(cap); rootVisuals.push({ id, kind: 'basic', mat: cap.material });
+    }
   }
-  stateBoxes.clear();
+  disposeGroup(stateBoxes); stateBoxMap.clear();
   for (const [id, st] of state.obj) {
-    const col = { root: P.critical, critical: P.critical, major: P.major, minor: P.minor }[st];
+    const col = { root: P.critical, critical: P.critical, major: P.major }[st]; // P3 : jamais dans la scène
     if (!col || glob.perimes.includes(id)) continue; // l'inconnu se dit en hachure, pas en couleur
     const o = deviceMeshes.get(id)?.mesh || racks.get(id)?.body; if (!o) continue;
-    const e = edges(new THREE.BoxGeometry(1, 1, 1), col, st === 'minor' ? 0.7 : 1); placeBox(e, new THREE.Box3().setFromObject(o), racks.has(id) ? 0.02 : 0.012); stateBoxes.add(e);
+    const e = fatBox(col, 3); placeBox(e, new THREE.Box3().setFromObject(o), racks.has(id) ? 0.02 : 0.012); stateBoxes.add(e); stateBoxMap.set(id, e);
   }
   if (!S.replay) for (const id of S.scars.keys()) {
     const o = deviceMeshes.get(id)?.mesh || racks.get(id)?.body; if (!o || state.obj.has(id)) continue;
-    const e = edges(new THREE.BoxGeometry(1, 1, 1), '#B8BFC7', 0.55); placeBox(e, new THREE.Box3().setFromObject(o), racks.has(id) ? 0.02 : 0.012); stateBoxes.add(e);
+    const e = fatBox('#B8BFC7', 1.5, 0.7); placeBox(e, new THREE.Box3().setFromObject(o), racks.has(id) ? 0.02 : 0.012); stateBoxes.add(e);
   }
   layoutVms();
-  for (const [id, t] of hostTiles) { const root = state.obj.get(id) === 'root'; t.mat.color.set(root ? HOST.root : HOST.base); t.rim.material.color.set(root ? P.critical : HOST.rim); }
-  for (const [id, n] of netNodes) { const st = state.obj.get(id); n.mat.color.set(st === 'root' ? '#7A322C' : st === 'major' ? '#7A6232' : id.startsWith('ext-') ? NET_EXT : NET_BASE); }
+  for (const [id, t] of hostTiles) {
+    const root = state.obj.get(id) === 'root';
+    t.mat.color.set(root ? P.critical : HOST.base); t.mat.emissive.set(root ? P.critical : 0x000000); t.mat.emissiveIntensity = root ? 0.45 : 0;
+    t.rim.material.color.set(root ? P.critical : HOST.rim);
+    if (root) rootVisuals.push({ id, kind: 'host', mat: t.mat });
+  }
+  for (const [id, n] of netNodes) {
+    const st = state.obj.get(id);
+    n.mat.color.set(st === 'root' ? P.critical : st === 'major' ? P.major : id.startsWith('ext-') ? NET_EXT : NET_BASE);
+    n.mat.emissive.set(st === 'root' ? P.critical : 0x000000); n.mat.emissiveIntensity = st === 'root' ? 0.45 : 0;
+    if (st === 'root') rootVisuals.push({ id, kind: 'host', mat: n.mat });
+  }
+  applyBlink();
   if (!svcPads.size) buildServices();
   rebuildFaint(); refreshHighlight();
 }
 function applyGlobalVisuals() {
   // redondance : double trait (tenue), tireté (mince), simple (perdue)
-  for (const c of clusterObjs) { const r = gl(glob.redondance, c.id)?.niveau || 'tenue'; c.outline.set(r, state.obj.get(c.id) === 'major' ? P.major : '#8A94A0'); }
+  for (const c of clusterObjs) { const r = gl(glob.redondance, c.id)?.niveau || 'tenue'; c.outline.set(r, state.obj.get(c.id) === 'major' ? P.major : '#6E7883'); }
   const tr = gl(glob.redondance, 'transit')?.niveau || 'tenue';
   const trHot = state.events.some((e) => e.id === 'transit');
   for (const t of tracks) drawTrack(t, t.id === 'transit' ? tr : 'tenue', t.id === 'transit' && trHot ? P.major : TRACK);
-  upsPlinth.set(gl(glob.redondance, 'ups-par-2')?.niveau || 'tenue', '#8A94A0');
+  upsPlinth.set(gl(glob.redondance, 'ups-par-2')?.niveau || 'tenue', '#6E7883');
   const levels = glob.redondance.map((r) => r.niveau);
   const worst = levels.includes('perdue') ? 'perdue' : levels.includes('mince') ? 'mince' : 'tenue';
-  plinth.set(worst, '#8A94A0'); // la forme dit la redondance ; la teinte reste à l'objet en alarme
+  plinth.set(worst, '#56606B'); // la forme dit la redondance ; la teinte reste à l'objet en alarme
   // marge consommée : luminance en deux paliers de bleu
   for (const [id, dm] of deviceMeshes) { const m = gl(glob.marge, id); if (m && state.obj.get(id) !== 'root') { dm.material.emissive.set(LUMINANCE[m.niveau]); dm.material.emissiveIntensity = m.niveau === 2 ? 0.55 : 0.35; } }
   for (const [rid] of racks) {
     const m = gl(glob.marge, rid); let top = margeRackTops.get(rid);
     if (!m) { if (top) top.visible = false; continue; }
-    if (!top) { const c = rackWorldPos(rid); top = new THREE.Mesh(new THREE.PlaneGeometry(RACK.w - 0.04, RACK.d - 0.04), new THREE.MeshBasicMaterial({ color: LUMINANCE[m.niveau], transparent: true, opacity: 0.85 })); top.rotation.x = -Math.PI / 2; top.position.set(c.x, RACK.h + 0.006, c.z); globalGroup.add(top); margeRackTops.set(rid, top); }
+    if (!top) { const c = rackWorldPos(rid); top = new THREE.Mesh(new THREE.PlaneGeometry(RACK.w - 0.04, RACK.d - 0.04), new THREE.MeshBasicMaterial({ color: LUMINANCE[m.niveau] })); top.rotation.x = -Math.PI / 2; top.position.set(c.x, RACK.h + 0.006, c.z); globalGroup.add(top); margeRackTops.set(rid, top); }
     top.material.color.set(LUMINANCE[m.niveau]); top.visible = true;
   }
   for (const [id, t] of hostTiles) { const m = gl(glob.marge, id); if (m && state.obj.get(id) !== 'root') t.mat.color.set(LUMINANCE[m.niveau]); }
@@ -1222,9 +1280,9 @@ window.addEventListener('keydown', (e) => {
 });
 function startSearch() { S.search = ''; S.help = false; drawLegend(); announce('Recherche : tapez un nom, une adresse IP ou une application.'); }
 function refreshSearch() {
-  searchBoxes.clear();
+  disposeGroup(searchBoxes);
   searchHits = S.search ? searchObjects(S.search).map((x) => x.id).filter((id) => deviceMeshes.has(id) || vmTiles.has(id) || svcPads.has(id)) : [];
-  for (const id of searchHits.slice(0, 12)) { const o = deviceMeshes.get(id)?.mesh || vmTiles.get(id)?.mesh || svcPads.get(id)?.mesh; if (o) { const e = edges(new THREE.BoxGeometry(1, 1, 1), P.ivory, 0.9); placeBox(e, new THREE.Box3().setFromObject(o), 0.03); searchBoxes.add(e); } }
+  for (const id of searchHits.slice(0, 12)) { const o = deviceMeshes.get(id)?.mesh || vmTiles.get(id)?.mesh || svcPads.get(id)?.mesh; if (o) { const e = fatBox(P.ivory, 2, 0.9); placeBox(e, new THREE.Box3().setFromObject(o), 0.03); searchBoxes.add(e); } }
   invalidate();
 }
 
@@ -1239,21 +1297,19 @@ function replayIncident() {
 }
 function stopReplay() { if (!S.replay) return; S.replay = null; update(true); announce('Retour au direct.'); }
 // une scène figée et calme est le pire mensonge : toute la salle se hachure, l'horloge s'arrête en ambre
-const veils = [];
-{
-  // hachure fine à 45°, fond transparent, répétée tous les 0,3 m : la salle reste lisible sous le voile
-  const veilTex = K.canvasTex('veil', 64, 64, (g) => {
-    g.clearRect(0, 0, 64, 64); g.strokeStyle = 'rgba(138,148,160,0.55)'; g.lineWidth = 2;
-    for (let i = -64; i < 128; i += 16) { g.beginPath(); g.moveTo(i, 64); g.lineTo(i + 64, 0); g.stroke(); }
-  }, { repeat: true });
-  const veil = (w, d) => { const t = veilTex.clone(); t.needsUpdate = true; t.repeat.set(w / 0.3, d / 0.3); return new THREE.Mesh(new THREE.PlaneGeometry(w, d), new THREE.MeshBasicMaterial({ map: t, transparent: true, depthWrite: false })); };
-  const v0 = veil(K.room.x1 - K.room.x0, K.room.z1 - K.room.z0);
-  v0.rotation.x = -Math.PI / 2; v0.position.set((K.room.x0 + K.room.x1) / 2, 2.1, (K.room.z0 + K.room.z1) / 2); v0.visible = false; scene.add(v0); veils.push(v0);
-  for (const s of STRATA.slice(1)) { const v = veil(FOOT.x1 - FOOT.x0, FOOT.z1 - FOOT.z0); v.rotation.x = -Math.PI / 2; v.position.set(FOOT_C.x, 0.02, FOOT_C.z); v.visible = false; layers[s.id].group.add(v); veils.push(v); }
-}
+// Une seule hachure calculée en espace écran, dessinée après la maquette et avant les cartels : toute la salle
+// est barrée, sans plans hachurés empilés (moiré) ; le totem et la légende restent lisibles par-dessus.
+const gelHatch = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), new THREE.ShaderMaterial({
+  transparent: true, depthTest: false, depthWrite: false,
+  uniforms: { dpr: { value: renderer.getPixelRatio() }, clearBottom: { value: 0 } },
+  vertexShader: 'void main() { gl_Position = vec4(position.xy, 0.0, 1.0); }',
+  // la bande de la légende reste nette : « DONNÉES FIGÉES » doit se lire sans hachure
+  fragmentShader: 'uniform float dpr; uniform float clearBottom; void main() { if (gl_FragCoord.y < clearBottom || mod(gl_FragCoord.x - gl_FragCoord.y, 9.0 * dpr) > 1.5 * dpr) discard; gl_FragColor = vec4(0.72, 0.76, 0.80, 0.4); }',
+}));
+gelHatch.frustumCulled = false; gelHatch.renderOrder = 10; gelHatch.visible = false; scene.add(gelHatch);
 function toggleFreeze() {
   S.frozen = S.frozen ? null : { t: currentT(), since: nowT() };
-  for (const v of veils) v.visible = !!S.frozen;
+  gelHatch.visible = !!S.frozen; gelHatch.material.uniforms.clearBottom.value = 80 * uiScale() * renderer.getPixelRatio();
   announce(S.frozen ? 'Données figées : plus aucune mesure ne parvient, la scène n’est plus fiable.' : 'Flux de données rétabli.');
   update(true);
 }
@@ -1285,7 +1341,9 @@ function tick(now) {
     if (Math.abs(d.cur - d.target) > 0.001) {
       const step = reduceMotion ? 1 : Math.min(1, (now - (tick.last || now)) / CH.tiroirMs * 2.2);
       d.cur += (d.target - d.cur) * step; if (Math.abs(d.cur - d.target) < 0.003) d.cur = d.target;
-      deviceMeshes.get(id).mesh.position.z = d.base - 0.36 * d.cur; animating = true; shadowDirty = true; refreshHighlight();
+      deviceMeshes.get(id).mesh.position.z = d.base - 0.36 * d.cur; animating = true; shadowDirty = true;
+      const box = stateBoxMap.get(id); if (box) { deviceMeshes.get(id).mesh.updateMatrixWorld(true); placeBox(box, new THREE.Box3().setFromObject(deviceMeshes.get(id).mesh), 0.012); }
+      refreshHighlight();
     }
   }
   for (let i = pulses.length - 1; i >= 0; i--) {
@@ -1304,7 +1362,7 @@ function tick(now) {
     dirty = false;
     applyCamera();
     const pxPerWorld = (canvas.clientHeight || 1) / (2 * view.base / view.zoom);
-    placeMast();
+    placeMast(); applyTextLod(pxPerWorld);
     const lod = PAD.w * pxPerWorld >= 210 ? 'near' : 'far';
     if (lod !== padLod) { padLod = lod; for (const id of svcPads.keys()) drawPad(id); updateSvcLabels(); }
     layoutCards(pxPerWorld, new THREE.Vector3().setFromMatrixColumn(camera.matrixWorld, 0), new THREE.Vector3().setFromMatrixColumn(camera.matrixWorld, 1));
@@ -1314,15 +1372,26 @@ function tick(now) {
   }
   requestAnimationFrame(tick);
 }
-function resize() { renderer.setSize(canvas.clientWidth, canvas.clientHeight, false); invalidate(); }
+function resize() { renderer.setSize(canvas.clientWidth, canvas.clientHeight, false); for (const m of fatMats) m.resolution.set(canvas.clientWidth || 1, canvas.clientHeight || 1); invalidate(); }
 new ResizeObserver(resize).observe(canvas);
 
 // deux rythmes seulement : clignotement 1 Hz (cause P1 non prise en charge) et défilement 0,5 Hz (trafic hors régime)
 // phase calée sur l'horloge murale : deux postes et le mur clignotent ensemble
+function applyBlink() {
+  const RED = new THREE.Color(P.critical);
+  for (const v of rootVisuals) {
+    const root = state.roots.find((r) => r.obj === v.id && r.prio === 1);
+    const k = !root ? 1 : root.ackNow ? 0.6 : (!S.replay && !S.storm && !reduceMotion && !blinkOn ? 0.45 : 1);
+    if (v.kind === 'device') v.mat.emissiveIntensity = k;
+    else if (v.kind === 'host') { v.mat.color.copy(RED).multiplyScalar(k); v.mat.emissiveIntensity = 0.45 * k; }
+    else v.mat.color.copy(RED).multiplyScalar(k);
+  }
+  invalidate();
+}
 (function blinkTick() {
   const any = state.roots.some((r) => r.prio === 1 && !r.ackNow) && !S.replay && !S.storm && !reduceMotion;
   blinkOn = any ? Math.floor(Date.now() / 500) % 2 === 0 : true;
-  if (any) { drawBoard(); updateAlarmCards(); }
+  if (any) { drawBoard(); updateAlarmCards(); applyBlink(); }
   setTimeout(blinkTick, 500 - (Date.now() % 500) + 4);
 })();
 setInterval(() => { if (!scrolls.size || reduceMotion) return; for (const m of scrolls.values()) m.material.map.offset.x -= 0.5 / 12; invalidate(); }, 1000 / 12);

@@ -146,12 +146,40 @@ les compteurs « non pris ».
 | Repères de la règle au sol en ambre | Repères à l'encre ; violet en relecture seulement |
 | Libellé de salle en double | Un seul libellé, dans la légende de coin |
 
+### Passe de rendu, après une critique indépendante
+
+Le client a jugé la direction juste mais le rendu à reprendre. Une critique indépendante a mesuré les
+luminances des captures. Elle a relevé que la hiérarchie des sévérités était inversée : la cause P1 n'était
+qu'un contour de 1 px, tandis que la marge et les conséquences criaient. Corrections apportées :
+
+| Constat | Correction |
+|---|---|
+| La cause P1 ne domine pas ; rien ne clignote dans la 3D | Aplat rouge sur la façade, la plaque de l'hôte et une coiffe sur la baie, qui battent à 1 Hz (100 % ↔ 45 %) ; les conséquences n'ont plus qu'un trait rouge |
+| Le toit bleu de la marge est plus clair que le rouge | Paliers opaques `#46709C` et `#6690BE` ; chemins de câbles retirés, car ils barraient les toits |
+| Les traits d'état font 1 px | Contours d'état, sélection et traçage en traits épais (3 px, 2,5 px, 2 px) |
+| Tout est dans la même valeur de gris | Lumière principale haute : toits clairs, façades moyennes, flancs sombres ; équipements clairs sur obturateurs sombres |
+| Les strates se mélangent | Coque sombre autour de chaque objet logique ; aucun voile translucide |
+| Le gel crée du moiré | Une seule hachure en espace écran ; la bande de la légende reste nette |
+| Le texte posé dans la scène fait 3 à 8 px | Il est masqué sous 11 px (18 px au mur) ; les noms utiles passent en étiquettes à taille d'écran |
+| Le sol avant est vide | Salle raccourcie ; la règle du temps est gravée sur la tranche du socle |
+| La grammaire fuit | Plus de P3 jaune dans la scène, échafaudage gris, plus de teintes brunes, plinthe plus sombre |
+
+La critique a aussi écarté trois fausses bonnes idées : le halo lumineux (bloom) sur la cause, l'occlusion
+ambiante calculée (SSAO) avec des matières métalliques, et le texte posé à plat pour une lecture de loin.
+
 ## 7. Démo spatiale
 
 Lancer la démonstration (`SupervisionNG.cmd` ou `npm run demo`), puis ouvrir
 `http://localhost:8080/refonte/spatial/`. Elle fonctionne hors ligne. La page ne contient que la scène 3D.
-Seule la **légende de coin** (heure, âge des données, P1 et P2 non pris) est fixée à l'écran, par
-exception votée à l'unanimité : la vérité des données ne doit pas dépendre de l'endroit où regarde la caméra.
+La **légende de coin** (heure, âge des données, P1 et P2 non pris) est fixée à l'écran, par exception votée
+à l'unanimité : la vérité des données ne doit pas dépendre de l'endroit où regarde la caméra.
+
+Deux autres éléments sont fixés à l'écran, parce qu'à l'échelle de la maquette leur texte tombait à 7 px :
+
+- le **panneau du totem**, en haut à gauche, relié à un mât planté dans la salle ;
+- le **cartel de la panne mise en avant**, en haut à droite, relié à l'équipement par une ligne de rappel.
+
+Ils restent attachés à la scène et ne masquent jamais la maquette.
 
 Dans le scénario, chaque canal a un exemple :
 
@@ -197,6 +225,8 @@ Captures :
 - ![Chaîne du CRM tracée en ivoire du service jusqu'aux serveurs](maquettes/12-spatial-chaine-crm.jpg)
 - ![Moteur muet : toute la salle hachurée, heure figée en ambre](maquettes/13-spatial-donnees-figees.jpg)
 - ![Mode mur : caméra fixe, texte agrandi pour une lecture à 4 m](maquettes/14-spatial-mur.jpg)
+
+Les captures sont faites avec un rendu logiciel : le lissage des traits est meilleur sur un vrai poste.
 
 ## 8. Suites à donner
 

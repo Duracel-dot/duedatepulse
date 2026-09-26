@@ -205,12 +205,17 @@ La page ne contient que la scène.
 
 - **Strates superposées.** Physique au sol, puis réseau, virtualisation et services. Chaque élément logique
   est à l'aplomb de son ancrage physique : une verticale est une chaîne de dépendances.
-- **Tout est un objet de la scène.** Le tableau des pannes est un totem posé dans la salle. Les détails
-  s'ouvrent dans des cartels ancrés aux objets. La règle du temps est au sol.
+- **Tout est rattaché à la scène.** Le tableau des pannes est un totem planté dans la salle ; son panneau,
+  lisible, est fixé en haut à gauche au bout de son mât. Les détails s'ouvrent dans des cartels reliés aux
+  objets. La règle du temps est gravée sur la tranche du socle.
+- **Rendu de maquette.** La salle est posée sur un socle, avec des ombres portées et trois valeurs de
+  lumière. Les strates ont des filets nets et des onglets numérotés. Les objets logiques sont en relief,
+  cernés d'une coque sombre.
 - **Chorégraphie de panne.** Une onde au sol, les strates qui s'écartent, le serveur qui sort de sa baie et
   un recul de la caméra qui garde toute la salle.
 - **État global** (marge, redondance, inconnu, interventions) : il suit la grammaire du
   [conseil de production](CONSEIL-PRODUCTION.md).
 
-Seule une légende de coin (heure, âge des données, P1 et P2 non pris) reste fixée à l'écran. C'est une
-exception votée à l'unanimité par ce conseil.
+Hors de la scène, seule la légende de coin (heure, âge des données, P1 et P2 non pris) est fixée à l'écran,
+par exception votée à l'unanimité par ce conseil. Le panneau du totem et le cartel de la panne mise en avant
+sont aussi fixés à l'écran pour rester lisibles, mais ils restent reliés à la scène.

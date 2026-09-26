@@ -1,8 +1,6 @@
 // Grammaire visuelle de l'état global, arrêtée par le conseil de production (docs/refonte/CONSEIL-PRODUCTION.md).
 // Règle : un canal visuel = un seul sens. Une scène saine est immobile, opaque, doublée et sombre ;
 // l'état global se lit dans les exceptions à ces quatre qualités.
-import { P } from './data.js';
-
 export const CANAUX = [
   { canal: 'élévation', sens: 'niveau d’abstraction : physique, réseau, virtualisation, services', note: 'jamais une mesure' },
   { canal: 'teinte et forme', sens: 'sévérité d’une alarme', note: 'ivoire = interaction et traçage ; violet = temps non réel ; P3 absent du mur' },
@@ -17,7 +15,8 @@ export const CANAUX = [
 
 export const RYTHMES = CANAUX.filter((c) => c.hz);
 
-export const LUMINANCE = { 1: P.metric[2], 2: P.metric[4] };
+// deux paliers opaques, plus sombres que le rouge et l'ambre : en niveaux de gris, la marge ne crie jamais plus fort qu'une panne
+export const LUMINANCE = { 1: '#46709C', 2: '#6690BE' };
 
 export const CHOREGRAPHIE = {
   recadrageApresInactiviteS: 60,  // la caméra ne bouge seule que si personne ne la manipule
