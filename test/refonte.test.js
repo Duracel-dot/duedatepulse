@@ -3,8 +3,8 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import { OUTPUT, renderModule } from '../scripts/refonte-demo-data.mjs';
-import { stateAt, globalAt, T0, EVENT_BY_ID } from '../public/refonte/js/data.js';
-import { CANAUX, RYTHMES, LUMINANCE, CHOREGRAPHIE } from '../public/refonte/js/grammaire.js';
+import { stateAt, globalAt, thermalAt, T0, EVENT_BY_ID } from '../public/refonte/js/data.js';
+import { CANAUX, RYTHMES, LUMINANCE, CHOREGRAPHIE, THERMIQUE, tempRGB } from '../public/refonte/js/grammaire.js';
 
 test('world.js est à jour avec le monde de démonstration', () => {
   // fins de ligne normalisées : la CI Windows extrait les fichiers texte en CRLF
@@ -64,4 +64,34 @@ test('état global : redondance, marge et inconnu suivent le scénario', () => {
   assert.deepEqual(globalAt(0).perimes, ['lic-par-01']);
   assert.ok(globalAt(0).marge.some((m) => m.id === 'esx-par-07'), 'contention après la reprise HA');
   assert.ok(!globalAt(T0 - 60).marge.some((m) => m.id === 'esx-par-07'));
+});
+
+test('calque climat : échelle thermique ordonnée, bande ASHRAE dans le domaine', () => {
+  const t = THERMIQUE.stops.map(([v]) => v);
+  assert.deepEqual(t, [...t].sort((a, b) => a - b), 'paliers dans l’ordre des températures');
+  assert.equal(t[0], THERMIQUE.domaine[0]); assert.equal(t.at(-1), THERMIQUE.domaine[1]);
+  const [ra, rb] = THERMIQUE.ashrae.recommande;
+  assert.ok(ra > THERMIQUE.domaine[0] && rb < THERMIQUE.domaine[1] && THERMIQUE.isotherme === rb);
+  assert.deepEqual(tempRGB(-10), tempRGB(THERMIQUE.domaine[0]), 'bornée en dessous');
+  assert.deepEqual(tempRGB(99), tempRGB(THERMIQUE.domaine[1]), 'bornée au-dessus');
+  // l'extrémité chaude ne doit pas se confondre avec le rouge des alarmes P1 (#FF5A47)
+  const [r, g, b] = tempRGB(40); assert.ok(r < 0.8 && g < 0.3 && b > 0.15);
+});
+
+test('calque climat : le modèle thermique raconte le scénario (dégivrage de CLIM 2, panne d’esx-par-08)', () => {
+  const th = thermalAt(0);
+  assert.equal(th.racks.A04.inlet[2], 28.4, 'sonde avant haute d’A04 = alarme A04');
+  assert.ok(EVENT_BY_ID.get('a04').title.includes('28,4'));
+  assert.equal(th.racks.A05.inlet[2], 25.8, 'A05 = marge consommée palier 1');
+  const [c1, c2] = th.crac;
+  assert.ok(th.degivrage && c2.debit < c1.debit && c2.soufflage > c1.soufflage);
+  assert.ok(th.racks.A04.recirculation && !th.racks.A08.recirculation);
+  for (const [id, r] of Object.entries(th.racks)) {
+    if (!r.flux) { assert.equal(r.kw, 0, `${id} vide`); continue; }
+    assert.ok(r.inlet[0] <= r.inlet[1] && r.inlet[1] <= r.inlet[2], `${id} : l’air se réchauffe vers le haut`);
+    assert.ok(r.outlet > r.inlet[2], `${id} : la sortie est plus chaude que l’entrée`);
+  }
+  assert.ok(th.alleeChaude > th.ambiant && th.plafond < th.alleeChaude);
+  assert.ok(thermalAt(T0 - 10).racks.A06.outlet > th.racks.A06.outlet, 'esx-par-08 éteint : A06 souffle moins chaud');
+  assert.ok(thermalAt(-900).racks.A04.inlet[2] < 27 && !thermalAt(-900).degivrage, 'avant le dégivrage, A04 est dans la norme');
 });

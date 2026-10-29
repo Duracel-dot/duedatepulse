@@ -215,6 +215,7 @@ Raccourcis de la démo :
 | G | simuler un gel des données |
 | T | simuler une tempête |
 | M | mode mur |
+| C | calque climat (aussi : clic sur un climatiseur) |
 | / | chercher |
 | ? | aide |
 | Échap | revenir |
@@ -225,10 +226,50 @@ Captures :
 - ![Chaîne du CRM tracée en ivoire du service jusqu'aux serveurs](maquettes/12-spatial-chaine-crm.jpg)
 - ![Moteur muet : toute la salle hachurée, heure figée en ambre](maquettes/13-spatial-donnees-figees.jpg)
 - ![Mode mur : caméra fixe, texte agrandi pour une lecture à 4 m](maquettes/14-spatial-mur.jpg)
+- ![Calque climat : carte thermique, façades par sonde d'entrée, courants d'air jusqu'aux climatiseurs](maquettes/15-spatial-climat.jpg)
 
 Les captures sont faites avec un rendu logiciel : le lissage des traits est meilleur sur un vrai poste.
 
-## 8. Suites à donner
+## 8. Calque climat : courants d'air et colorimétrie thermique
+
+Le client a demandé une visualisation des courants d'air et une colorimétrie selon la température. Les deux
+contredisent la grammaire du conseil si elles restent affichées en permanence. La teinte n'y dit que la
+sévérité, et aucun mouvement de routine n'y est admis. Elles forment donc un **calque**, ouvert à la demande
+(touche C ou clic sur un climatiseur) et refermé par C ou Échap.
+
+Dans ce calque :
+
+- **La teinte dit la température de l'air.** L'échelle va de 16 à 40 °C. Elle est divergente autour de la
+  consigne : bleu pour le froid, gris clair pour la cible, orange puis carmin pour le chaud. Le carmin reste
+  distinct du rouge vif des alarmes P1.
+- **Carte thermique au sol** : l'air à 1,2 m. Des isothermes tous les 2 °C et l'isotherme 27 °C (limite
+  recommandée ASHRAE A1) en trait clair doublent la teinte pour une lecture en niveaux de gris.
+- **Façades** : chaque baie est colorée par ses trois sondes d'entrée (bas, milieu, haut). Les équipements et
+  leurs contours d'état restent devant.
+- **Allée chaude** : le vitrage du confinement prend la couleur de sa température.
+- **Courants d'air** : des particules à traînée suivent le circuit. Elles montent des dalles perforées,
+  traversent les baies, rejoignent l'allée chaude, passent par la reprise au plafond et retournent aux
+  climatiseurs. Les courants de CLIM 2, en dégivrage, sont moins nombreux et plus lents.
+- **Recirculation** : de l'air chaud échappé par la porte de l'allée chaude redescend dans le haut d'A03,
+  A04 et A05. Il explique l'alarme A04 (28,4 °C en entrée haute, prise en charge par l'astreinte avec le
+  commentaire « CLIM 2 en dégivrage »).
+- **Cartels** : soufflage, reprise, débit et état de chaque climatiseur ; baies dont l'entrée haute dépasse
+  25 °C ; température de l'allée chaude. Un clic sur une baie donne ses trois sondes et sa sortie.
+
+Ce qui ne change pas :
+
+- Les strates logiques et la marge bleue s'effacent : elles disent déjà une température ou n'ont pas de
+  sens thermique.
+- Les alarmes gardent leur forme : glyphes, épingles, totem, coiffe et clignotement de la cause P1.
+- Au mur, en mouvement réduit ou quand les données sont figées, les particules s'immobilisent ; les lignes
+  de courant restent.
+
+Le modèle thermique de la démo est schématique : faux plancher soufflé, allées froides ouvertes, allée
+chaude confinée avec reprise au plafond, charge estimée par type d'équipement. En production, il serait
+alimenté par les sondes de baie (trois par face avant, en SNMP ou Redfish) et par les climatiseurs (Modbus
+ou BACnet).
+
+## 9. Suites à donner
 
 Par ordre de priorité :
 

@@ -28,3 +28,31 @@ export const CHOREGRAPHIE = {
   cicatriceMin: 30,
   tempete: { nouvellesCauses: 3, fenetreS: 60, agregationAuDela: 7, retentionConsequencesS: 15 },
 };
+
+// ---------------------------------------------------------------- calque « climat » (demande du client)
+// Hors de ce calque, la teinte ne dit que la sévérité. Dans le calque climat, activé à la demande (touche C
+// ou clic sur un climatiseur), la teinte dit la température de l'air : les strates logiques et la marge bleue
+// s'effacent, les alarmes gardent leur forme (glyphes, épingles, coiffe de la cause P1) et le totem.
+// Échelle divergente centrée sur la consigne : froid en bleu, cible en gris clair, chaud en orange puis
+// carmin (jamais le rouge vif des alarmes P1). Les isothermes et les valeurs écrites doublent la teinte
+// pour une lecture en niveaux de gris.
+export const THERMIQUE = {
+  domaine: [16, 40],
+  stops: [[16, '#2C5FB8'], [19, '#3F8FD6'], [22, '#7CC4E4'], [24.5, '#CFD8C2'], [27, '#F2C35B'], [30, '#F08A3C'], [34, '#D9532E'], [40, '#A3243A']],
+  ashrae: { recommande: [18, 27], admissible: [15, 32] }, // ASHRAE TC 9.9, classe A1, température d'entrée
+  isotherme: 27,
+  pasIsothermes: 2,
+};
+
+const hexRGB = (h) => [parseInt(h.slice(1, 3), 16) / 255, parseInt(h.slice(3, 5), 16) / 255, parseInt(h.slice(5, 7), 16) / 255];
+const STOPS_RGB = THERMIQUE.stops.map(([t, h]) => [t, hexRGB(h)]);
+/** Couleur sRGB (0 à 1) d'une température, interpolée entre les paliers de l'échelle. */
+export function tempRGB(t) {
+  const s = STOPS_RGB;
+  if (!(t > s[0][0])) return s[0][1];
+  for (let i = 1; i < s.length; i++) {
+    if (t <= s[i][0]) { const k = (t - s[i - 1][0]) / (s[i][0] - s[i - 1][0]); return s[i - 1][1].map((v, j) => v + (s[i][1][j] - v) * k); }
+  }
+  return s[s.length - 1][1];
+}
+export const tempCss = (t, a = 1) => { const [r, g, b] = tempRGB(t); return `rgba(${Math.round(r * 255)},${Math.round(g * 255)},${Math.round(b * 255)},${a})`; };

@@ -285,3 +285,50 @@ export function globalAt(t) {
   const perimes = t >= -900 ? ['lic-par-01'] : [];
   return { redondance, marge, changements, budget, horsRegime, perimes };
 }
+
+// ---------------------------------------------------------------- climat de la salle (calque climat)
+// Modèle schématique mais cohérent du scénario : faux plancher soufflé par deux climatiseurs, allées froides
+// ouvertes, allée chaude confinée avec reprise au plafond. CLIM 2 est en dégivrage depuis 13 min (commentaire
+// de prise en charge de l'alarme A04) : débit réduit, les baies les plus demandeuses du bout de la rangée A
+// manquent d'air froid en haut et aspirent l'air chaud qui fuit de l'allée chaude.
+const WATTS = { server: 650, storage: 900, switch: 150, router: 200, firewall: 350, loadbalancer: 200, ups: 450, appliance: 500 };
+const DEGIVRAGE_DEBUT = -800;
+export function thermalAt(t) {
+  const degivrage = t >= DEGIVRAGE_DEBUT;
+  const incident = t >= T0;
+  const r1 = (v) => Math.round(v * 10) / 10;
+  const racks = {};
+  for (const row of WORLD.room.rows) {
+    const rowA = row.racks[0]?.id.startsWith('A');
+    row.racks.forEach((rk, i) => {
+      let w = 0;
+      for (const d of rk.devices) {
+        let p = (WATTS[d.type] || 300) * ((d.height || 1) >= 2 || d.type !== 'server' ? 1 : 0.62);
+        if (incident && d.id === 'esx-par-08') p = 0; // les deux alimentations sont perdues
+        if (t >= T0 + 50 && d.id === 'esx-par-07') p *= 1.25; // reprise HA
+        w += p;
+      }
+      if (!w) { racks[rk.id] = { flux: false, kw: 0 }; return; }
+      // dalle perforée plus froide près des climatiseurs (bout droit) ; rangée B moins servie pendant le dégivrage
+      const loin = rowA ? 7 - i : i; // distance aux climatiseurs, en baies
+      const base = (rowA ? 18.8 : 19.4 + (degivrage ? 0.6 : 0)) + 0.12 * loin;
+      let inlet = [base + 0.8, base + 1.6, base + 2.4];
+      if (degivrage) {
+        if (rk.id === 'A04') inlet = [21.4, 24.6, 28.4];
+        if (rk.id === 'A05') inlet = [21.0, 23.1, 25.8];
+        if (rk.id === 'A03') inlet = [20.7, 22.6, 24.9];
+      }
+      const kw = w / 1000;
+      const dT = Math.min(15, Math.max(6, 6 + 4.5 * kw));
+      const outlet = inlet.reduce((a, b) => a + b, 0) / 3 + dT;
+      racks[rk.id] = { flux: true, kw: r1(kw), inlet: inlet.map(r1), outlet: r1(outlet), recirculation: degivrage && ['A03', 'A04', 'A05'].includes(rk.id) };
+    });
+  }
+  const flows = Object.values(racks).filter((r) => r.flux);
+  const alleeChaude = r1(flows.reduce((a, r) => a + r.outlet * r.kw, 0) / flows.reduce((a, r) => a + r.kw, 0));
+  const crac = [
+    { id: 'clim-1', nom: 'CLIM 1', soufflage: 17.5, reprise: r1(alleeChaude - 1.2), debit: degivrage ? 1 : 0.8, etat: degivrage ? 'nominal · compense CLIM 2' : 'nominal' },
+    { id: 'clim-2', nom: 'CLIM 2', soufflage: degivrage ? 21 : 17.6, reprise: r1(alleeChaude - 3.4), debit: degivrage ? 0.35 : 0.8, etat: degivrage ? `dégivrage depuis ${Math.max(0, Math.round((t - DEGIVRAGE_DEBUT) / 60))} min` : 'nominal' },
+  ];
+  return { degivrage, racks, crac, alleeChaude, plafond: r1(alleeChaude - 2.4), ambiant: degivrage ? 24.6 : 23.4, sig: `${degivrage}|${incident}|${t >= T0 + 50}` };
+}

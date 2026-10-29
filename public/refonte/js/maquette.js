@@ -197,7 +197,8 @@ export function buildMaquette(THREE, { shadows = false, trays = true } = {}) {
   wallRight.position.set(room.x1 + WALL_T / 2, WALL_H / 2, (room.z0 + room.z1) / 2); world.add(solid(wallRight));
   world.add(at(edges(wallRight.geometry, '#8D949C', 0.45), wallRight.position));
 
-  // climatiseurs contre le mur droit
+  // climatiseurs contre le mur droit (soufflage dans le faux plancher, reprise en partie haute)
+  const clims = [];
   for (const [i, z] of [[1, -1.5], [2, -4.5]]) {
     const g = new THREE.Group();
     const bodyMat = mat('#2E343C');
@@ -208,11 +209,12 @@ export function buildMaquette(THREE, { shadows = false, trays = true } = {}) {
       c.fillStyle = '#8A94A0'; c.font = "600 16px 'IBM Plex Mono', monospace"; c.fillText('18,4°', w - 74, 38);
     }), roughness: 0.95 });
     const b = box(0.9, 1.95, 1.8, [bodyMat, front, bodyMat, bodyMat, bodyMat, bodyMat]);
-    b.position.y = 0.975; g.add(solid(b));
+    b.position.y = 0.975; g.add(solid(b)); b.userData = { id: `clim-${i}` };
     g.add(at(edges(b.geometry, '#56606B', 0.9), b.position));
     const lab = textPlane(`CLIM ${i}`, { size: 0.16, color: '#8A94A0', spacing: 6 });
     lab.rotation.x = -Math.PI / 2; lab.position.set(-0.36, 1.952, 0.2); g.add(lab); labels.push({ mesh: lab, size: 0.16 });
     g.position.set(room.x1 - 0.55, 0, z + 0.9); world.add(g);
+    clims.push({ id: `clim-${i}`, mesh: b, pos: g.position.clone(), front: room.x1 - 1.0, top: 1.95 });
   }
 
   // titre de salle au sol, façon cartouche d'architecte
@@ -222,7 +224,7 @@ export function buildMaquette(THREE, { shadows = false, trays = true } = {}) {
   sub.rotation.x = -Math.PI / 2; sub.position.set(-1.9, 0.004, room.z1 - 0.35); world.add(sub);
 
   // ------------------------------------------------------------ baies et équipements
-  const pickables = [];
+  const pickables = clims.map((c) => c.mesh);
   const deviceMeshes = new Map();   // id -> { mesh, material, rack, anchor }
   const racks = new Map();          // id -> { group, outline, uband, anchor, devices }
   const rackBody = mat('#2A3038');
@@ -338,5 +340,5 @@ export function buildMaquette(THREE, { shadows = false, trays = true } = {}) {
     return v;
   }
 
-  return { world, room, slab: SL, labels, titles: [title, sub], pickables, deviceMeshes, racks, rackWorldPos, hotLen, hotZ0, hotZ1, mat, lineMat, edges, box, at, canvasTex, textPlane, hatchTex, glowTex, perfTex };
+  return { world, room, slab: SL, labels, clims, glass, titles: [title, sub], pickables, deviceMeshes, racks, rackWorldPos, hotLen, hotZ0, hotZ1, mat, lineMat, edges, box, at, canvasTex, textPlane, hatchTex, glowTex, perfTex };
 }

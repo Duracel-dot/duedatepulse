@@ -3,9 +3,10 @@
 // Un élément logique est à l'aplomb de son ancrage physique : une verticale = une chaîne de dépendances.
 // L'état global suit la grammaire du conseil de production (grammaire.js) : une scène saine est immobile,
 // opaque, doublée et sombre ; l'état global se lit dans les exceptions.
-import { WORLD, P, T0, EVENT_BY_ID, ACK_TEMPLATES, stateAt, globalAt, describe, searchObjects, metricsFor, series, fmtAge, fmtClock, nowT, SERVICE_NAMES } from './data.js';
+import { WORLD, P, T0, EVENT_BY_ID, ACK_TEMPLATES, stateAt, globalAt, thermalAt, describe, searchObjects, metricsFor, series, fmtAge, fmtClock, nowT, SERVICE_NAMES } from './data.js';
 import { buildMaquette, RACK, ROW_A_FRONT, ROW_B_FRONT } from './maquette.js';
-import { LUMINANCE, CHOREGRAPHIE as CH } from './grammaire.js';
+import { LUMINANCE, CHOREGRAPHIE as CH, THERMIQUE, tempCss } from './grammaire.js';
+import { buildClimat } from './climat.js';
 
 const canvas = document.getElementById('scene');
 const live = document.getElementById('a11y-live');
@@ -46,6 +47,7 @@ const S = {
   seenP1: new Set(),
   lastP1Resolved: null,
   scars: new Map(),      // objet rétabli → instant de résolution (cicatrice de 30 min)
+  climat: false,         // calque climat : températures de l'air et courants d'air (touche C)
 };
 const currentT = () => (S.frozen ? S.frozen.t : S.replay ? S.replay.t : nowT());
 let state = stateAt(0, S.acks);
@@ -210,6 +212,19 @@ const posts = new THREE.Group(); scene.add(posts);
   }
 }
 function placePosts() { for (const p of posts.children) p.scale.y = strataY('services') + 0.001; }
+
+// ------------------------------------------------------------ calque climat (températures et courants d'air)
+const climat = buildClimat({ THREE, K, RACK, rackWorldPos, ROW_A_FRONT, ROW_B_FRONT, dpr: renderer.getPixelRatio() });
+scene.add(climat.group);
+const fmtT = (v) => `${v.toFixed(1).replace('.', ',')} °C`;
+const rackOf = (id) => (racks.has(id) ? id : deviceMeshes.get(id)?.rack || null);
+/** Ce que le calque climat dit d'un objet, en une ligne. */
+function climWord(id) {
+  const th = thermalAt(currentT());
+  if (id.startsWith('clim-')) { const c = th.crac.find((x) => x.id === id); return c ? `soufflage ${fmtT(c.soufflage)} · débit ${Math.round(c.debit * 100)} %` : null; }
+  const r = th.racks[rackOf(id)]; if (!r) return null;
+  return r.flux ? `entrée ${r.inlet.map((v) => v.toFixed(1).replace('.', ',')).join(' · ')} °C` : 'baie vide, obturée';
+}
 
 // ------------------------------------------------------------ strate réseau
 const NET_TYPES = new Set(['switch', 'router', 'firewall', 'loadbalancer']);
@@ -464,6 +479,7 @@ const traceLines = fatLines(P.ivory, 1.6, 0.7); scene.add(traceLines);
 
 function worldOfDevice(id) { const dm = deviceMeshes.get(id); if (!dm) return null; const v = new THREE.Vector3(); dm.anchor.getWorldPosition(v); return v; }
 function worldOf(id) {
+  if (id.startsWith('clim-')) { const c = K.clims.find((x) => x.id === id); return c ? new THREE.Vector3(c.pos.x, c.top, c.pos.z) : null; }
   if (svcPads.has(id)) { const p = svcPads.get(id).pos; return new THREE.Vector3(p.x, strataY('services') + PAD.h, p.z); }
   if (vmTiles.has(id)) { const p = vmTiles.get(id).pos; return new THREE.Vector3(p.x, strataY('virtualisation') + HOST.h + VM.h, p.z); }
   if (netNodes.has(id)) { const p = netNodes.get(id).pos; return new THREE.Vector3(p.x, strataY('reseau') + 0.07, p.z); }
@@ -583,13 +599,26 @@ function button(card, g, x, y, w, h, label, action, { primary = false } = {}) {
 // unanime du conseil : la vérité des données ne doit pas dépendre de l'endroit où regarde la caméra
 const legend = new Card({ w: 900, h: 64, anchor: () => new THREE.Vector3(-1 + 20 / (canvas.clientWidth / 2), -1 + 18 / (canvas.clientHeight / 2), 0).unproject(camera), offset: [0, 0], screen: true, prio: 0 });
 function drawLegend() {
-  const extra = (S.search != null ? 1 : 0) + (S.help ? 5 : 0);
-  legend.resize(900, 64 + extra * 24);
+  const extra = (S.search != null ? 1 : 0) + (S.help ? 6 : 0);
+  legend.resize(900, 64 + extra * 24 + (S.climat ? 52 : 0));
   legend.draw((g, w, h) => {
     let y = 20;
     g.textBaseline = 'alphabetic';
     if (S.help) {
-      for (const t of ['glisser : tourner · clic droit : déplacer · molette : zoom · clic : ouvrir', '1 à 4 : isoler une strate · 0 : toutes · E : écarter les strates · H : vue globale', 'Tab : parcourir les pannes · Entrée : cadrer ou ouvrir · A : prendre en charge', 'R : rejouer l’incident · L : direct · G : simuler un gel des données', 'T : simuler une tempête · M : mode mur · / : chercher · Échap : revenir']) { g.font = `400 13px ${SANS}`; halo(g, t, 2, y, '#8A94A0'); y += 24; }
+      for (const t of ['glisser : tourner · clic droit : déplacer · molette : zoom · clic : ouvrir', '1 à 4 : isoler une strate · 0 : toutes · E : écarter les strates · H : vue globale', 'Tab : parcourir les pannes · Entrée : cadrer ou ouvrir · A : prendre en charge', 'R : rejouer l’incident · L : direct · G : simuler un gel des données', 'T : simuler une tempête · M : mode mur · / : chercher · Échap : revenir', 'C (ou clic sur un climatiseur) : calque climat, températures et courants d’air']) { g.font = `400 13px ${SANS}`; halo(g, t, 2, y, '#8A94A0'); y += 24; }
+    }
+    if (S.climat) {
+      // échelle thermique : bande recommandée ASHRAE A1 (18-27 °C) au-dessus, isotherme 27 °C marquée
+      const [t0, t1] = THERMIQUE.domaine; const bx = 168; const bw = 330; const by = y + 4; const X = (t) => bx + ((t - t0) / (t1 - t0)) * bw;
+      g.font = `600 13px ${COND}`; g.letterSpacing = '2px'; halo(g, 'CLIMAT · T° DE L’AIR', 2, by + 10, P.inkLight); g.letterSpacing = '0px';
+      for (let i = 0; i < bw; i++) { g.fillStyle = tempCss(t0 + (i / bw) * (t1 - t0)); g.fillRect(bx + i, by, 1, 12); }
+      g.strokeStyle = 'rgba(0,0,0,0.6)'; g.strokeRect(bx - 0.5, by - 0.5, bw + 1, 13);
+      const [ra, rb] = THERMIQUE.ashrae.recommande;
+      g.fillStyle = P.inkLight; g.fillRect(X(ra), by - 5, X(rb) - X(ra), 1.5); g.fillRect(X(ra), by - 5, 1.5, 4); g.fillRect(X(rb) - 1.5, by - 5, 1.5, 4);
+      g.fillStyle = '#EDE8DC'; g.fillRect(X(THERMIQUE.isotherme) - 1, by - 2, 2, 16);
+      g.font = `400 11px ${MONO}`; for (const t of [16, 18, 22, 27, 32, 40]) halo(g, String(t), X(t) - 6, by + 26, '#8A94A0');
+      g.font = `400 12px ${SANS}`; halo(g, 'ASHRAE recommandé 18-27 °C · isothermes tous les 2 °C', bx + bw + 16, by + 11, '#8A94A0');
+      y += 52;
     }
     if (S.search != null) { g.font = `500 15px ${MONO}`; halo(g, `RECHERCHE › ${S.search}_   ${searchHits.length} résultat${searchHits.length > 1 ? 's' : ''} · Entrée : aller · Échap : annuler`, 2, y, P.ivory); y += 24; }
     let x = 2;
@@ -604,7 +633,7 @@ function drawLegend() {
     g.font = `400 13px ${SANS}`; halo(g, 'non pris en charge', x, y + 4, '#8A94A0');
     y += 26;
     g.font = `400 13px ${SANS}`;
-    const hint = S.pendingFrame ? 'Nouvelle panne : Entrée pour la cadrer' : S.storm ? 'Tempête : animations suspendues, causes agrégées' : S.mur ? 'Mode mur : caméra fixe, aucune animation · M pour revenir' : '? aide · / chercher · Tab pannes · R rejouer l’incident';
+    const hint = S.pendingFrame ? 'Nouvelle panne : Entrée pour la cadrer' : S.climat && !S.mur ? 'Calque climat · clic : sondes d’une baie ou d’un climatiseur · C ou Échap : revenir' : S.storm ? 'Tempête : animations suspendues, causes agrégées' : S.mur ? 'Mode mur : caméra fixe, aucune animation · M pour revenir' : '? aide · / chercher · Tab pannes · R rejouer l’incident · C climat';
     halo(g, hint, 2, y + 4, S.pendingFrame ? P.ivory : '#5A636E');
   });
 }
@@ -783,7 +812,10 @@ function framePoints(pts, { theta = view.theta, phi = view.phi, margin = 1.04, m
   const target = right.clone().multiplyScalar((x0 + x1) / 2 - (padLeft / H) * half).addScaledVector(up, (y0 + y1) / 2 - (padBottom / H) * half).addScaledVector(fwd, depth);
   animateTo({ target, theta, phi, zoom: view.base / half }, ms);
 }
-function home(ms) { framePoints(contentPoints(S.explodeTarget), { theta: HOME.theta, phi: HOME.phi, ms }); }
+function home(ms) {
+  if (S.climat) { framePoints(climatPoints(), { theta: HOME.theta, phi: 0.58, ms }); return; }
+  framePoints(contentPoints(S.explodeTarget), { theta: HOME.theta, phi: HOME.phi, ms });
+}
 
 // ============================================================ commandes souris et tactile
 let drag = null; const pointers = new Map();
@@ -841,6 +873,7 @@ function onClick(e) {
   if (h?.card) { if (h.action) runAction(h.action); return; }
   if (h?.board) { focusEvent(h.board.id, { fromUser: true }); return; }
   if (!h?.id) { if (S.sel) select(null); else if (S.focusEvent || S.stratum) { S.focusEvent = null; S.stratum = null; applyFocus(); refreshHighlight(); home(); } return; }
+  if (h.id.startsWith('clim-') && !S.climat) { toggleClimat(true); return; }
   if (h.id.startsWith('strate:')) { isolate(h.id.slice(7)); return; }
   if (['rule', 'knob'].includes(h.id)) return;
   select(h.id === S.sel ? null : h.id);
@@ -848,16 +881,16 @@ function onClick(e) {
 
 // ============================================================ sélection, survol, mise en avant
 let hoverCard = null; let selCard = null; const alarmCards = new Map(); const svcLabels = new Map();
-function labelOf(id) { return id.startsWith('svc:') ? svcName(id) : id.startsWith('ext-') ? EXT.find((e) => e.id === id)?.name || id : id; }
+function labelOf(id) { return id.startsWith('svc:') ? svcName(id) : id.startsWith('ext-') ? EXT.find((e) => e.id === id)?.name || id : id.startsWith('clim-') ? `CLIM ${id.slice(5)}` : id; }
 function stateWord(st) { return { root: 'cause racine', critical: 'critique', down: 'interrompu', unreach: 'injoignable', major: 'majeur', degraded: 'sans réserve', minor: 'mineur', maint: 'maintenance' }[st] || 'nominal'; }
-function kindOf(id) { const d = describe(id); if (id.startsWith('svc:')) return 'service'; if (id.startsWith('ext-')) return 'sortie réseau'; return { host: 'hôte', vm: 'VM', rack: 'baie', cluster: 'cluster', device: d?.device?.type || 'équipement' }[d?.kind] || 'objet'; }
+function kindOf(id) { const d = describe(id); if (id.startsWith('svc:')) return 'service'; if (id.startsWith('ext-')) return 'sortie réseau'; if (id.startsWith('clim-')) return 'climatiseur'; return { host: 'hôte', vm: 'VM', rack: 'baie', cluster: 'cluster', device: d?.device?.type || 'équipement' }[d?.kind] || 'objet'; }
 function setHover(id) {
   if (id === S.hover) return;
   S.hover = id;
   if (hoverCard) { hoverCard.remove(); hoverCard = null; }
   if (id && id !== S.sel) {
     hoverCard = new Card({ w: 260, h: 50, anchor: () => worldOf(id), offset: [16, 18], prio: 3 });
-    hoverCard.draw((g, w, h) => { panel(g, w, h); g.fillStyle = P.ivory; g.font = `500 14px ${MONO}`; g.fillText(labelOf(id), 12, 21, w - 24); g.fillStyle = P.ink; g.font = `400 12px ${SANS}`; g.fillText(`${kindOf(id)} · ${globalWord(id) || stateWord(state.obj.get(id))}`, 12, 39, w - 24); });
+    hoverCard.draw((g, w, h) => { panel(g, w, h); g.fillStyle = P.ivory; g.font = `500 14px ${MONO}`; g.fillText(labelOf(id), 12, 21, w - 24); g.fillStyle = P.ink; g.font = `400 12px ${SANS}`; g.fillText(`${kindOf(id)} · ${(S.climat || id.startsWith('clim-') ? climWord(id) : null) || globalWord(id) || stateWord(state.obj.get(id))}`, 12, 39, w - 24); });
   }
   refreshHighlight();
 }
@@ -889,6 +922,14 @@ function drawSelCard() {
   if (id.startsWith('svc:')) { const ms = svcMembers.get(id) || []; facts.push(['Membres', `${ms.length} (${ms.slice(0, 3).join(', ')}${ms.length > 3 ? '…' : ''})`]); }
   if (d?.kind === 'rack') facts.push(['Équipements', String(WORLD.room.rows.flatMap((r) => r.racks).find((r) => r.id === id)?.devices.length)]);
   if (d?.kind === 'cluster') facts.push(['Hôtes', String(d.hosts.length)]);
+  // climat : sondes de la baie, état du climatiseur
+  { const th = thermalAt(currentT());
+    if (id.startsWith('clim-')) { const c = th.crac.find((x) => x.id === id); if (c) facts.push(['Soufflage', fmtT(c.soufflage)], ['Reprise', fmtT(c.reprise)], ['Débit', `${Math.round(c.debit * 100)} %`], ['État', c.etat]); }
+    const r = th.racks[rackOf(id)];
+    if (r?.flux && (S.climat || d?.kind === 'rack')) {
+      facts.push(['Entrée b·m·h', `${r.inlet.map((v) => v.toFixed(1).replace('.', ',')).join(' · ')} °C`], ['Sortie', fmtT(r.outlet)]);
+      if (r.recirculation) facts.push(['Air', 'recirculation d’air chaud en haut']);
+    } }
   // état global de l'objet : ce que la scène encode, en toutes lettres
   const redo = gl(glob.redondance, id); if (redo) facts.push(['Redondance', `${redo.niveau} · ${redo.detail}`]);
   const marge = gl(glob.marge, id); if (marge) facts.push(['Marge', marge.detail]);
@@ -910,7 +951,7 @@ function drawSelCard() {
       g.fillStyle = ev.prio === 1 ? P.critical : ev.prio === 2 ? P.major : P.inkLight; g.font = `600 13px ${SANS}`;
       g.fillText(`${USER_IMPACT[id] && st === 'down' ? USER_IMPACT[id] : ev.title}${ev.prio ? ` · ${fmtAge(ev.age)}` : ''}`, 14, y + 14, w - 28);
       g.fillStyle = P.ink; g.font = `400 11.5px ${SANS}`; g.fillText(ev.group ? `conséquence de ${state.roots.find((r) => r.id === ev.group)?.obj}` : ev.ackNow ? `pris en charge par ${ev.ackNow.by}` : ev.detail, 14, y + 31, w - 28); y += 40;
-    } else { g.fillStyle = P.ink; g.font = `400 12px ${SANS}`; g.fillText(globalWord(id) || 'nominal', 14, y + 12); y += 18; }
+    } else { g.fillStyle = P.ink; g.font = `400 12px ${SANS}`; g.fillText((id.startsWith('clim-') ? thermalAt(currentT()).crac.find((x) => x.id === id)?.etat : null) || globalWord(id) || 'nominal', 14, y + 12); y += 18; }
     for (const [k, v] of facts) { g.fillStyle = P.ink; g.font = `400 12px ${SANS}`; g.fillText(k, 14, y + 14); g.fillStyle = P.inkLight; g.font = `400 12px ${MONO}`; g.fillText(v, 106, y + 14, w - 120); y += 19; }
     if (ms.length) {
       const sr = series(id, ms[0], '24h', Math.floor(currentT() / 300) * 300); const max = { cpu: 100, mem: 100, net: 100, temp: 35 }[ms[0]];
@@ -949,6 +990,7 @@ function refreshHighlight() {
   hl = { sel: selC.ids, red: redC.ids, hover: hovC.ids };
   setFat(hiLines, [...selC.segs, ...hovC.segs]);
   setFat(traceLines, redC.segs);
+  if (S.stratum) { hiLines.visible = false; traceLines.visible = false; } // la chaîne mènerait à des strates masquées
   for (const [id, t] of vmTiles) if (t.base) t.mat.color.copy(t.base).multiplyScalar(dimmed(id) ? 0.7 : 1);
   for (const [id, t] of hostTiles) if (!gl(glob.marge, id) && state.obj.get(id) !== 'root') t.mat.color.set(dimmed(id) ? HOST.dim : HOST.base);
   for (const [id, n] of netNodes) if (!state.obj.has(id) && !gl(glob.marge, id)) n.mat.color.set(dimmed(id) ? NET_DIM : id.startsWith('ext-') ? NET_EXT : NET_BASE);
@@ -968,6 +1010,7 @@ let rootVisuals = []; // objets de la cause P1 dont la luminance bat à 1 Hz
 function placeBox(o, b3, pad) { const s = new THREE.Vector3(); const c = new THREE.Vector3(); b3.getSize(s); b3.getCenter(c); o.position.copy(c); o.scale.set(s.x + pad, s.y + pad, s.z + pad); }
 
 function isolate(id) {
+  if (S.climat) toggleClimat(false, { frame: false });
   S.stratum = S.stratum === id || id === 'tout' ? null : id;
   applyFocus();
   if (!S.stratum) { home(); return; }
@@ -980,7 +1023,7 @@ function isolate(id) {
 }
 function applyFocus() {
   for (const s of STRATA.slice(1)) { layers[s.id].group.visible = !S.stratum || S.stratum === s.id; layers[s.id].sheetMat.opacity = S.stratum === s.id ? 0.04 : 0; }
-  faintLines.visible = !S.stratum; posts.visible = !S.stratum; drawStrataTabs(); updateSvcLabels(); invalidate();
+  faintLines.visible = !S.stratum; posts.visible = !S.stratum; drawStrataTabs(); updateSvcLabels(); refreshHighlight(); invalidate();
 }
 function focusObject(id) { const w = worldOf(id); if (!w) return; framePoints(contentPoints(S.explodeTarget, [w, w.clone().setY(w.y + 0.6)])); }
 
@@ -1142,6 +1185,7 @@ function update(force = false) {
   for (const [o, t] of S.scars) if (nowT() - t > CH.cicatriceMin * 60) { S.scars.delete(o); healed = true; }
   if (healed && !changed) applyStateVisuals();
   drawBoard(); drawLegend(); placeKnob(); updateAlarmCards();
+  if (S.climat) { if (climat.apply(thermalAt(currentT()))) invalidate(); drawClimatCards(); }
   if (selCard) drawSelCard();
 }
 function applyStateVisuals() {
@@ -1203,7 +1247,7 @@ function applyGlobalVisuals() {
     const m = gl(glob.marge, rid); let top = margeRackTops.get(rid);
     if (!m) { if (top) top.visible = false; continue; }
     if (!top) { const c = rackWorldPos(rid); top = new THREE.Mesh(new THREE.PlaneGeometry(RACK.w - 0.04, RACK.d - 0.04), new THREE.MeshBasicMaterial({ color: LUMINANCE[m.niveau] })); top.rotation.x = -Math.PI / 2; top.position.set(c.x, RACK.h + 0.006, c.z); globalGroup.add(top); margeRackTops.set(rid, top); }
-    top.material.color.set(LUMINANCE[m.niveau]); top.visible = true;
+    top.material.color.set(LUMINANCE[m.niveau]); top.visible = !S.climat;
   }
   for (const [id, t] of hostTiles) { const m = gl(glob.marge, id); if (m && state.obj.get(id) !== 'root') t.mat.color.set(LUMINANCE[m.niveau]); }
   for (const [id, n] of netNodes) { const m = gl(glob.marge, id); if (m && !state.obj.has(id)) n.mat.color.set(LUMINANCE[m.niveau]); }
@@ -1249,7 +1293,7 @@ window.addEventListener('keydown', (e) => {
     return;
   }
   const k = e.key; const kl = k.toLowerCase();
-  if (S.mur && !['m', 'escape'].includes(kl)) return;
+  if (S.mur && !['m', 'escape', 'c'].includes(kl)) return;
   if (k === '/') { e.preventDefault(); startSearch(); return; }
   if (k === 'Tab') { e.preventDefault(); touched(); const n = boardRows.length; if (!n) return; S.boardFocus = (S.boardFocus + (e.shiftKey ? -1 : 1) + n) % n; focusEvent(boardRows[S.boardFocus].ev.id, { fromUser: true }); return; }
   if (k === 'Enter') {
@@ -1261,6 +1305,7 @@ window.addEventListener('keydown', (e) => {
     if (S.mur) { toggleMur(); return; }
     if (S.help) { S.help = false; drawLegend(); return; }
     if (S.sel) { select(null); return; }
+    if (S.climat) { toggleClimat(false); return; }
     if (S.focusEvent || S.stratum || S.boardFocus >= 0) { S.focusEvent = null; S.stratum = null; S.boardFocus = -1; applyFocus(); refreshHighlight(); updateAlarmCards(); drawBoard(); home(); }
     return;
   }
@@ -1268,7 +1313,8 @@ window.addEventListener('keydown', (e) => {
   if (k >= '1' && k <= '4') { touched(); isolate(STRATA[Number(k) - 1].id); return; }
   if (k === '0') { isolate('tout'); return; }
   if (kl === 'e') { S.explodeTarget = S.explodeTarget > 0.5 ? 0 : 1; invalidate(); return; }
-  if (kl === 'h') { S.focusEvent = null; S.stratum = null; applyFocus(); refreshHighlight(); home(); return; }
+  if (kl === 'c') { toggleClimat(); return; }
+  if (kl === 'h') { if (S.climat) toggleClimat(false, { frame: false }); S.focusEvent = null; S.stratum = null; applyFocus(); refreshHighlight(); home(); return; }
   if (kl === 'r') { replayIncident(); return; }
   if (kl === 'l') { stopReplay(); return; }
   if (kl === 'g') { toggleFreeze(); return; }
@@ -1313,8 +1359,66 @@ function toggleFreeze() {
   announce(S.frozen ? 'Données figées : plus aucune mesure ne parvient, la scène n’est plus fiable.' : 'Flux de données rétabli.');
   update(true);
 }
+// calque climat : la teinte passe à la température de l'air ; strates logiques et marge bleue s'effacent,
+// les alarmes gardent leur forme (glyphes, épingles, coiffe de la cause P1), le totem et la légende restent
+function toggleClimat(on = !S.climat, { frame = true } = {}) {
+  if (on === S.climat) return;
+  S.climat = on;
+  if (on) { select(null); S.stratum = 'physique'; } else S.stratum = null;
+  applyFocus();
+  climat.setVisible(on, thermalAt(currentT()));
+  for (const [rid, top] of margeRackTops) top.visible = !on && !!gl(glob.marge, rid);
+  drawClimatCards(); drawLegend();
+  if (frame) home();
+  announce(on ? 'Calque climat : températures de l’air et courants d’air. C ou Échap pour revenir.' : 'Calque climat fermé.');
+  invalidate();
+}
+function climatPoints() {
+  const pts = []; const sl = K.slab;
+  for (const x of [sl.x0, sl.x1]) for (const z of [sl.z0, sl.z1]) pts.push(new THREE.Vector3(x, -sl.h, z), new THREE.Vector3(x, 0, z));
+  for (const x of [K.room.x0, K.room.x1]) for (const z of [K.room.z0, K.room.z1]) pts.push(new THREE.Vector3(x, 2.85, z));
+  return pts;
+}
+// cartels du calque : climatiseurs, baies dont l'entrée haute dépasse 25 °C, allée chaude
+const climatCards = new Map();
+function drawClimatCards() {
+  const want = new Map();
+  const th = S.climat ? thermalAt(currentT()) : null;
+  if (th) {
+    for (const c of th.crac) want.set(c.id, { kind: 'crac', c });
+    for (const [id, r] of Object.entries(th.racks)) if (r.flux && r.inlet[2] >= 25) want.set(id, { kind: 'rack', r });
+    want.set('allee-chaude', { kind: 'allee' });
+  }
+  for (const [k, card] of climatCards) if (!want.has(k)) { card.remove(); climatCards.delete(k); }
+  for (const [k, w] of want) {
+    let card = climatCards.get(k);
+    if (!card) {
+      if (w.kind === 'crac') { const cl = K.clims.find((x) => x.id === k); card = new Card({ w: 260, h: 50, anchor: () => new THREE.Vector3(cl.pos.x, cl.top, cl.pos.z), offset: [14, 10], id: k, prio: 3.5, leader: '#6E7883' }); }
+      else if (w.kind === 'rack') { const c = rackWorldPos(k); const f = k[0] === 'A' ? ROW_A_FRONT : ROW_B_FRONT; card = new Card({ w: 200, h: 46, anchor: () => new THREE.Vector3(c.x, RACK.h - 0.3, f), offset: [-214, 36], id: k, prio: 3.5, leader: '#6E7883' }); }
+      else card = new Card({ w: 180, h: 40, anchor: () => new THREE.Vector3(K.hotLen / 2 - RACK.w / 2, RACK.h + 0.05, (K.hotZ0 + K.hotZ1) / 2), offset: [-90, 70], prio: 3.6, leader: '#6E7883' });
+      climatCards.set(k, card);
+    }
+    const swatch = (g, x, y, t) => { g.fillStyle = tempCss(t); g.fillRect(x, y, 12, 12); g.strokeStyle = 'rgba(0,0,0,0.5)'; g.strokeRect(x + 0.5, y + 0.5, 11, 11); };
+    card.draw((g, cw, ch) => {
+      panel(g, cw, ch); g.textBaseline = 'alphabetic';
+      if (w.kind === 'crac') {
+        swatch(g, 12, 11, w.c.soufflage);
+        g.fillStyle = P.ivory; g.font = `500 14px ${MONO}`; g.fillText(w.c.nom, 32, 22);
+        g.fillStyle = w.c.debit < 0.5 ? P.inkLight : P.ink; g.font = `400 12px ${SANS}`; g.fillText(w.c.etat, 96, 22, cw - 106);
+        g.fillStyle = P.inkLight; g.font = `400 12px ${MONO}`; g.fillText(`souffle ${fmtT(w.c.soufflage)} · reprend ${fmtT(w.c.reprise)} · ${Math.round(w.c.debit * 100)} %`, 12, 40, cw - 24);
+      } else if (w.kind === 'rack') {
+        swatch(g, 12, 11, w.r.inlet[2]);
+        g.fillStyle = P.ivory; g.font = `500 14px ${MONO}`; g.fillText(`${k} · ${fmtT(w.r.inlet[2])}`, 32, 22);
+        g.fillStyle = P.ink; g.font = `400 11.5px ${SANS}`; g.fillText(w.r.inlet[2] > THERMIQUE.ashrae.recommande[1] ? `entrée haute · au-dessus de ${THERMIQUE.ashrae.recommande[1]} °C` : 'entrée haute · marge mince', 12, 38, cw - 24);
+      } else {
+        swatch(g, 12, 13, th.alleeChaude);
+        g.fillStyle = P.inkLight; g.font = `400 12px ${SANS}`; g.fillText('Allée chaude', 32, 24); g.fillStyle = P.ivory; g.font = `500 14px ${MONO}`; g.fillText(fmtT(th.alleeChaude), 112, 24);
+      }
+    });
+  }
+}
 function toggleMur() {
-  S.mur = !S.mur; select(null); S.stratum = null; applyFocus();
+  S.mur = !S.mur; select(null); S.stratum = S.climat ? 'physique' : null; applyFocus();
   if (S.mur) { S.explodeTarget = 0.85; anim = null; canvas.style.cursor = 'default'; }
   home(0); update(true);
   announce(S.mur ? 'Mode mur : caméra fixe, aucune animation.' : 'Mode poste.');
@@ -1357,6 +1461,7 @@ function tick(now) {
     if (S.replay.t >= nowT() - 0.5) stopReplay(); else if (Math.floor(S.replay.t) !== Math.floor(S.replay.t - dt)) update();
     animating = true;
   }
+  if (S.climat && climat.tick(Math.min(0.1, (now - (tick.last || now)) / 1000), !S.mur && !reduceMotion && !S.frozen)) animating = true;
   tick.last = now;
   if (dirty || animating) {
     dirty = false;
@@ -1412,4 +1517,4 @@ applyCamera();
 requestAnimationFrame(tick);
 // la panne en cours est présentée à l'ouverture : la scène se meut vers elle sans perdre la salle
 setTimeout(() => checkNewIncidents(), 900);
-window.__spatial = { S, view, invalidate, get frames() { return frames; }, focusEvent, select, isolate, toggleStorm, toggleFreeze, toggleMur };
+window.__spatial = { S, view, invalidate, get frames() { return frames; }, get particles() { return climat.particleCount; }, focusEvent, select, isolate, toggleStorm, toggleFreeze, toggleMur, toggleClimat };

@@ -211,6 +211,9 @@ La page ne contient que la scène.
 - **Rendu de maquette.** La salle est posée sur un socle, avec des ombres portées et trois valeurs de
   lumière. Les strates ont des filets nets et des onglets numérotés. Les objets logiques sont en relief,
   cernés d'une coque sombre.
+- **Calque climat** (touche C ou clic sur un climatiseur) : carte thermique au sol avec isothermes,
+  façades colorées par sonde d'entrée et courants d'air animés, des dalles perforées jusqu'aux
+  climatiseurs. Voir le [§ 8 du conseil de production](CONSEIL-PRODUCTION.md#8-calque-climat--courants-dair-et-colorimétrie-thermique).
 - **Chorégraphie de panne.** Une onde au sol, les strates qui s'écartent, le serveur qui sort de sa baie et
   un recul de la caméra qui garde toute la salle.
 - **État global** (marge, redondance, inconnu, interventions) : il suit la grammaire du

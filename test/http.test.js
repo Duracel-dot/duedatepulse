@@ -135,7 +135,7 @@ test('démo spatiale servie sur /refonte/spatial/ (tout dans la scène 3D)', asy
   const html = await r.text();
   assert.match(html, /sng:app/);
   assert.match(html, /\/vendor\/three\/build\/three\.module\.js/, 'three.js local, pas de CDN');
-  for (const p of ['/refonte/js/spatial.js', '/refonte/js/maquette.js', '/refonte/js/grammaire.js', '/refonte/spatial.css']) {
+  for (const p of ['/refonte/js/spatial.js', '/refonte/js/maquette.js', '/refonte/js/grammaire.js', '/refonte/js/climat.js', '/refonte/spatial.css', '/vendor/three/addons/lines/LineSegments2.js']) {
     const res = await fetch(`${base}${p}`);
     assert.equal(res.status, 200, p);
     await res.arrayBuffer();

@@ -35,6 +35,8 @@ export async function createScene(container, { threeUrl, onPick, onHover }) {
 
   // ------------------------------------------------------------ maquette partagée (salle, baies, équipements)
   const { world, pickables, deviceMeshes, racks, rackWorldPos, hotLen, mat, edges, at, textPlane, hatchTex, glowTex } = buildMaquette(THREE);
+  // les climatiseurs ne sont cliquables que dans la démo spatiale (calque climat) : la vue classique n'a pas leur fiche
+  for (let i = pickables.length - 1; i >= 0; i--) if (pickables[i].userData.id?.startsWith('clim-')) pickables.splice(i, 1);
   scene.add(world);
 
   // ------------------------------------------------------------ calque logique

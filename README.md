@@ -226,7 +226,8 @@ incident avec des données figées.
 La **démo spatiale** <http://localhost:8080/refonte/spatial/> intègre toute la console dans la scène 3D. Les
 strates physique, réseau, virtualisation et services y sont superposées à l'aplomb les unes des autres. La
 démo applique aussi la grammaire de l'état global (marge, redondance, inconnu, interventions), arrêtée par un
-[conseil d'experts de la production](docs/refonte/CONSEIL-PRODUCTION.md).
+[conseil d'experts de la production](docs/refonte/CONSEIL-PRODUCTION.md). Son calque climat (touche C)
+montre les températures de l'air et les courants d'air de la salle.
 
 ## Licence
 
