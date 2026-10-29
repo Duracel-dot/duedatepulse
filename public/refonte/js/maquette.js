@@ -7,6 +7,8 @@ export const RACK = { w: 0.6, d: 1.2, h: 2.0, plinth: 0.06 };
 export const INNER_W = 0.482;                // largeur utile 19"
 export const ROW_A_FRONT = 0;                // face avant de la rangée A, tournée vers la caméra (+z)
 export const ROW_B_FRONT = -3.6;             // face avant de la rangée B, tournée vers -z
+// obturateurs manquants (U de début et de fin) : l'air chaud repasse de l'arrière vers l'avant de la baie
+export const MISSING_BLANKS = { A04: [30, 33] };
 
 /**
  * Construit la maquette. Retourne le groupe `world` et les index des objets sélectionnables.
@@ -273,6 +275,8 @@ export function buildMaquette(THREE, { shadows = false, trays = true } = {}) {
         deviceMeshes.set(d.id, { mesh, material: m, rack: rack.id, anchor, u: d.u, h });
         devs.push(d);
       }
+      const gap = MISSING_BLANKS[rack.id];
+      if (gap) for (let u = gap[0]; u <= gap[1]; u++) used[u] = true; // trou dans la façade, sans obturateur
       let start = null;
       for (let u = 1; u <= rack.units + 1; u++) {
         const free = u <= rack.units && !used[u];
@@ -326,6 +330,38 @@ export function buildMaquette(THREE, { shadows = false, trays = true } = {}) {
   }
   const hotLab = textPlane('ALLÉE CHAUDE', { size: 0.12, color: '#8A94A0', spacing: 8 });
   hotLab.rotation.y = -Math.PI / 2; hotLab.position.set(-RACK.w / 2 - 0.01, 1.25, hotZ0 + 0.12); world.add(hotLab); labels.push({ mesh: hotLab, size: 0.12 });
+  // allées froides confinées elles aussi : toit, paroi longue et portes vitrées ; l'air froid n'entre que par
+  // les dalles perforées et n'en sort qu'à travers les baies
+  const coldGlass = glass.clone();
+  const cold = {
+    A: { x0: -RACK.w / 2, x1: hotLen - RACK.w / 2, z0: ROW_A_FRONT, z1: ROW_A_FRONT + 1.2 },
+    B: { x0: -RACK.w / 2, x1: hotLen - RACK.w / 2, z0: ROW_B_FRONT - 1.2, z1: ROW_B_FRONT },
+  };
+  const H = RACK.h + 0.05;
+  for (const [row, c] of Object.entries(cold)) {
+    const w = c.x1 - c.x0; const d = c.z1 - c.z0; const cx = (c.x0 + c.x1) / 2; const cz = (c.z0 + c.z1) / 2;
+    const top = new THREE.Mesh(new THREE.PlaneGeometry(w, d), coldGlass); top.rotation.x = -Math.PI / 2; top.position.set(cx, H, cz); world.add(top);
+    const outer = row === 'A' ? c.z1 : c.z0;
+    const wall = new THREE.Mesh(new THREE.PlaneGeometry(w, H), coldGlass); wall.position.set(cx, H / 2, outer); world.add(wall);
+    for (const ex of [c.x0, c.x1]) { const door = new THREE.Mesh(new THREE.PlaneGeometry(d, H), coldGlass); door.rotation.y = Math.PI / 2; door.position.set(ex, H / 2, cz); world.add(door); }
+    world.add(at(edges(new THREE.BoxGeometry(w, H, d), '#C9D3DC', 0.26), new THREE.Vector3(cx, H / 2, cz)));
+    const lab = textPlane('ALLÉE FROIDE', { size: 0.12, color: '#8A94A0', spacing: 8 });
+    lab.rotation.y = -Math.PI / 2; lab.position.set(c.x0 - 0.01, 1.25, row === 'A' ? c.z1 - 0.12 : c.z0 + 1.08); world.add(lab); labels.push({ mesh: lab, size: 0.12 });
+  }
+  // gaine de reprise fermée : du toit de l'allée chaude jusqu'au sommet des deux climatiseurs
+  const ductGlass = glass.clone();
+  const duct = { x0: -RACK.w / 2, x1: clims[0].pos.x + 0.3, z: hotC, w: 0.62, y0: H + 0.01, h: 0.36 };
+  {
+    const main = new THREE.Mesh(new THREE.BoxGeometry(duct.x1 - duct.x0, duct.h, duct.w), ductGlass);
+    main.position.set((duct.x0 + duct.x1) / 2, duct.y0 + duct.h / 2, duct.z); world.add(main);
+    world.add(at(edges(main.geometry, '#C9D3DC', 0.24), main.position));
+    for (const c of clims) {
+      const len = Math.abs(c.pos.z - duct.z) + duct.w / 2;
+      const br = new THREE.Mesh(new THREE.BoxGeometry(duct.w, duct.h, len), ductGlass);
+      br.position.set(c.pos.x, c.top + 0.01 + duct.h / 2, (c.pos.z + duct.z) / 2 + Math.sign(c.pos.z - duct.z) * duct.w / 4); world.add(br);
+      world.add(at(edges(br.geometry, '#C9D3DC', 0.24), br.position));
+    }
+  }
   // chemins de câbles au-dessus des rangées
   for (const z of trays ? [ROW_A_FRONT - 0.35, ROW_B_FRONT + 0.35] : []) {
     const tray = box(hotLen + 0.4, 0.06, 0.3, mat('#262C33'));
@@ -340,5 +376,5 @@ export function buildMaquette(THREE, { shadows = false, trays = true } = {}) {
     return v;
   }
 
-  return { world, room, slab: SL, labels, clims, glass, titles: [title, sub], pickables, deviceMeshes, racks, rackWorldPos, hotLen, hotZ0, hotZ1, mat, lineMat, edges, box, at, canvasTex, textPlane, hatchTex, glowTex, perfTex };
+  return { world, room, slab: SL, labels, clims, glass, coldGlass, ductGlass, cold, duct, titles: [title, sub], pickables, deviceMeshes, racks, rackWorldPos, hotLen, hotZ0, hotZ1, mat, lineMat, edges, box, at, canvasTex, textPlane, hatchTex, glowTex, perfTex };
 }

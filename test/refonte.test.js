@@ -85,7 +85,8 @@ test('calque climat : le modèle thermique raconte le scénario (dégivrage de C
   assert.equal(th.racks.A05.inlet[2], 25.8, 'A05 = marge consommée palier 1');
   const [c1, c2] = th.crac;
   assert.ok(th.degivrage && c2.debit < c1.debit && c2.soufflage > c1.soufflage);
-  assert.ok(th.racks.A04.recirculation && !th.racks.A08.recirculation);
+  assert.ok(th.racks.A04.recirculation && !th.racks.A03.recirculation && !th.racks.A08.recirculation, 'zones fermées : seule A04 recircule, par ses obturateurs manquants');
+  assert.equal(th.fuite.baie, 'A04');
   for (const [id, r] of Object.entries(th.racks)) {
     if (!r.flux) { assert.equal(r.kw, 0, `${id} vide`); continue; }
     assert.ok(r.inlet[0] <= r.inlet[1] && r.inlet[1] <= r.inlet[2], `${id} : l’air se réchauffe vers le haut`);

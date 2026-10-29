@@ -288,9 +288,10 @@ export function globalAt(t) {
 
 // ---------------------------------------------------------------- climat de la salle (calque climat)
 // Modèle schématique mais cohérent du scénario : faux plancher soufflé par deux climatiseurs, allées froides
-// ouvertes, allée chaude confinée avec reprise au plafond. CLIM 2 est en dégivrage depuis 13 min (commentaire
-// de prise en charge de l'alarme A04) : débit réduit, les baies les plus demandeuses du bout de la rangée A
-// manquent d'air froid en haut et aspirent l'air chaud qui fuit de l'allée chaude.
+// et allée chaude confinées, reprise par une gaine fermée jusqu'au sommet des climatiseurs. CLIM 2 est en
+// dégivrage depuis 13 min (commentaire de prise en charge de l'alarme A04) : la pression baisse dans l'allée
+// froide A, et l'air chaud repasse à travers A04 par les U30 à U33 restés sans obturateur ; il réchauffe le
+// haut d'A04 et, par mélange, celui de ses voisines A03 et A05.
 const WATTS = { server: 650, storage: 900, switch: 150, router: 200, firewall: 350, loadbalancer: 200, ups: 450, appliance: 500 };
 const DEGIVRAGE_DEBUT = -800;
 export function thermalAt(t) {
@@ -321,7 +322,7 @@ export function thermalAt(t) {
       const kw = w / 1000;
       const dT = Math.min(15, Math.max(6, 6 + 4.5 * kw));
       const outlet = inlet.reduce((a, b) => a + b, 0) / 3 + dT;
-      racks[rk.id] = { flux: true, kw: r1(kw), inlet: inlet.map(r1), outlet: r1(outlet), recirculation: degivrage && ['A03', 'A04', 'A05'].includes(rk.id) };
+      racks[rk.id] = { flux: true, kw: r1(kw), inlet: inlet.map(r1), outlet: r1(outlet), recirculation: degivrage && rk.id === 'A04' };
     });
   }
   const flows = Object.values(racks).filter((r) => r.flux);
@@ -330,5 +331,6 @@ export function thermalAt(t) {
     { id: 'clim-1', nom: 'CLIM 1', soufflage: 17.5, reprise: r1(alleeChaude - 1.2), debit: degivrage ? 1 : 0.8, etat: degivrage ? 'nominal · compense CLIM 2' : 'nominal' },
     { id: 'clim-2', nom: 'CLIM 2', soufflage: degivrage ? 21 : 17.6, reprise: r1(alleeChaude - 3.4), debit: degivrage ? 0.35 : 0.8, etat: degivrage ? `dégivrage depuis ${Math.max(0, Math.round((t - DEGIVRAGE_DEBUT) / 60))} min` : 'nominal' },
   ];
-  return { degivrage, racks, crac, alleeChaude, plafond: r1(alleeChaude - 2.4), ambiant: degivrage ? 24.6 : 23.4, sig: `${degivrage}|${incident}|${t >= T0 + 50}` };
+  const fuite = degivrage ? { baie: 'A04', u: [30, 33], detail: 'air chaud repassant par les U30-U33 sans obturateur' } : null;
+  return { degivrage, racks, crac, fuite, alleeChaude, plafond: r1(alleeChaude - 2.4), ambiant: degivrage ? 24.6 : 23.4, sig: `${degivrage}|${incident}|${t >= T0 + 50}` };
 }

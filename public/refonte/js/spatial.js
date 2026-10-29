@@ -68,7 +68,8 @@ let shadowDirty = true;
 const scene = new THREE.Scene();
 const camera = new THREE.OrthographicCamera(-1, 1, 1, -1, -200, 300);
 // éclairage de maquette : lumière principale haute à gauche qui porte les ombres, débouchage froid, contre-jour
-scene.add(new THREE.HemisphereLight(0xC9D6E3, 0x0B0D10, 1.1));
+const hemi = new THREE.HemisphereLight(0xC9D6E3, 0x0B0D10, 1.1); scene.add(hemi);
+const LIGHTS = { hemi: 1.1, sun: 3.6, fill: 0.35 };
 const sun = new THREE.DirectionalLight(0xFFF6EA, 3.6); sun.position.set(0, 11, 3.8);
 sun.target.position.set(2.5, 0, -1.7); scene.add(sun, sun.target);
 sun.castShadow = true; sun.shadow.mapSize.set(2048, 2048); sun.shadow.bias = -0.0004; sun.shadow.normalBias = 0.015; sun.shadow.radius = 3;
@@ -555,10 +556,17 @@ function layoutCards(pxPerWorld, right, up) {
     let rx = sx + c.offset[0] * sc; let ry = sy - (c.offset[1] * sc) - c.h * sc; // rectangle écran (y vers le bas)
     let dy = 0;
     if (!c.screen) {
+      const collide = (yy) => placed.find((r) => rx < r.x + r.w + 4 && rx + c.w * sc + 4 > r.x && yy < r.y + r.h + 4 && yy + c.h * sc + 4 > r.y);
       for (let guard = 0; guard < 12 && !c.fixed; guard++) {
-        const hit = placed.find((r) => rx < r.x + r.w + 4 && rx + c.w * sc + 4 > r.x && ry - dy < r.y + r.h + 4 && ry - dy + c.h * sc + 4 > r.y);
+        const hit = collide(ry - dy);
         if (!hit) break;
         dy += (ry - dy + c.h * sc) - hit.y + 6;
+      }
+      // plus de place au-dessus : chercher en dessous de l'ancre plutôt que d'être rabattu sous un autre cartel
+      if (!c.fixed && ry - dy < 8) {
+        let down = 0;
+        for (let guard = 0; guard < 12; guard++) { const hit = collide(ry + down); if (!hit) break; down = hit.y + hit.h + 6 - ry; }
+        if (ry + down + c.h * sc < H - 8) dy = -down;
       }
       if (c.optional && dy > 16) { c.mesh.visible = c.line.visible = false; continue; }
     }
@@ -665,13 +673,14 @@ function drawStrataTabs() {
 
 // ============================================================ totem des pannes (dans la salle)
 // Le totem garde sa place dans la salle (pied, socle, ombre) mais son panneau a une taille d'écran constante :
-// à l'échelle de la maquette, son texte tombait à 7 px dans la vue d'ensemble.
-const BOARD = { w: 1100, h: 700, px: 480 };
+// à l'échelle de la maquette, son texte tombait à 7 px dans la vue d'ensemble. Il est compact par défaut :
+// une ligne par panne, quatre au plus ; un clic sur l'en-tête le déplie (détail de chaque panne, six lignes).
+const TOTEM = { w: 360, head: 36, row: 28, rowOpen: 44, max: 4, maxOpen: 6 };
+let totemOpen = false;
 // Le panneau est fixé en haut à gauche de l'écran (lisible, jamais recouvert) ; son mât part du fond de la salle et
 // s'allonge à chaque image pour le rejoindre : le totem reste un objet de la salle, quelle que soit la caméra.
 const STAND = new THREE.Vector3(K.room.x0 + 0.4, 3, K.room.z0 + 0.4);
-const BOARD_H = Math.round(BOARD.px * BOARD.h / BOARD.w);
-const totem = new Card({ w: BOARD.px, h: BOARD_H, anchor: () => STAND, offset: [0, 0], prio: 0.5, leader: '#6E7883' });
+const totem = new Card({ w: TOTEM.w, h: 150, anchor: () => STAND, offset: [0, 0], prio: 0.5, leader: '#6E7883' });
 totem.fixed = [20, 20];
 const mastMat = new THREE.MeshStandardMaterial({ color: '#46505A', roughness: 0.6, metalness: 0.2 });
 const mastGeo = new THREE.CylinderGeometry(0.035, 0.035, 1, 16); mastGeo.translate(0, 0.5, 0);
@@ -684,7 +693,7 @@ function placeMast() {
   const H = canvas.clientHeight || 1; const sc = uiScale();
   const b = new THREE.Vector3(STAND.x, 0, STAND.z).project(camera); const o = new THREE.Vector3(STAND.x, 1, STAND.z).project(camera);
   const yb = (1 - b.y) / 2 * H; const perUnit = yb - (1 - o.y) / 2 * H;
-  const panelBottom = (totem.fixed[1] + BOARD_H) * sc + 14;
+  const panelBottom = (totem.fixed[1] + totem.h) * sc + 14;
   STAND.y = Math.min(12, Math.max(0.9, perUnit > 0 ? (yb - panelBottom) / perUnit : 3));
   if (Math.abs(mast.scale.y - STAND.y) > 0.02) shadowDirty = true;
   mast.scale.y = STAND.y; mastCap.position.set(STAND.x, STAND.y, STAND.z);
@@ -696,38 +705,43 @@ function alarmList() {
   return [...roots.filter((r) => !r.ackNow).sort((a, b) => a.prio - b.prio || a.start - b.start), ...roots.filter((r) => r.ackNow)];
 }
 function drawBoard() {
-  totem.draw((g, w, h, card) => {
-    const k = w / BOARD.w; g.save(); g.scale(k, k); paintBoard(g); g.restore();
-    boardRows.forEach((r, i) => card.hits.push({ x: 28 * k, y: r.y0 * k, w: (BOARD.w - 56) * k, h: 100 * k, action: `board:${i}` }));
-  });
-}
-function paintBoard(g) {
-  const W = BOARD.w; const H = BOARD.h;
-  g.fillStyle = 'rgba(16,19,24,0.96)'; g.fillRect(0, 0, W, H);
-  g.strokeStyle = S.replay ? P.temporal : S.frozen ? P.major : '#3B434E'; g.lineWidth = 5; g.strokeRect(2.5, 2.5, W - 5, H - 5);
-  g.textBaseline = 'alphabetic';
-  g.fillStyle = P.ink; g.font = `600 34px ${COND}`; g.letterSpacing = '4px'; g.fillText('PANNES', 44, 74); g.letterSpacing = '0px';
-  [1, 2].forEach((p, i) => { drawGlyph(g, p, 250 + i * 150, 62, 17); g.fillStyle = state.counters[p] ? P.ivory : P.ink; g.font = `500 56px ${MONO}`; g.fillText(String(state.counters[p]), 280 + i * 150, 82); });
-  g.fillStyle = P.ink; g.font = `400 24px ${SANS}`; g.fillText('non pris en charge', 560, 74);
-  g.fillStyle = '#2A313B'; g.fillRect(40, 110, W - 80, 2);
-  const list = alarmList().slice(0, S.storm ? 4 : 5); // l'en-tête de tempête prend la place d'une ligne
+  const all = alarmList(); const open = totemOpen;
+  const rows = all.slice(0, open ? TOTEM.maxOpen : TOTEM.max); const more = all.length - rows.length;
+  const rowH = open ? TOTEM.rowOpen : TOTEM.row; const stormH = S.storm ? 22 : 0;
+  const top = TOTEM.head + stormH + 4;
+  const h = top + Math.max(1, rows.length) * rowH + (more > 0 ? 22 : 6);
+  totem.resize(TOTEM.w, h);
   boardRows = [];
-  if (S.storm) { g.fillStyle = P.major; g.font = `600 30px ${SANS}`; g.fillText(`Tempête : ${S.storm.count} alarmes en ${Math.round(S.storm.window)} s`, 44, 160); g.fillStyle = P.inkLight; g.font = `400 26px ${SANS}`; g.fillText(`cause commune probable : ${S.storm.cause}`, 44, 198); }
-  const top = S.storm ? 232 : 132;
-  list.forEach((r, i) => {
-    const y = top + i * 108;
-    const focus = i === S.boardFocus; const sel = S.focusEvent === r.id;
-    if (focus || sel) { g.fillStyle = '#1F252E'; g.fillRect(28, y, W - 56, 100); if (focus) { g.strokeStyle = P.ivory; g.lineWidth = 4; g.strokeRect(30, y + 2, W - 60, 96); } }
-    g.fillStyle = r.ackNow ? P.ink : P.inkLight; g.font = `500 30px ${MONO}`; g.fillText(String(i + 1), 50, y + 48);
-    const blinking = r.prio === 1 && !r.ackNow && !S.replay && !S.storm;
-    drawGlyph(g, r.prio, 104, y + 38, 16, { ack: !!r.ackNow, dim: blinking && !blinkOn });
-    g.fillStyle = r.ackNow ? P.ink : P.ivory; g.font = `500 38px ${MONO}`; g.fillText(r.obj.startsWith('svc:') ? svcName(r.obj) : r.obj, 140, y + 50, 340);
-    g.fillStyle = r.ackNow ? P.ink : P.inkLight; g.font = `500 34px ${SANS}`; g.fillText(r.title, 500, y + 50, W - 540);
-    g.fillStyle = P.ink; g.font = `400 26px ${MONO}`; g.fillText(`${fmtAge(r.age)} · ${r.ackNow ? `pris : ${r.ackNow.by}` : 'non pris'}${r.children?.length ? ` · ${r.children.length} conséquences` : ''}`, 140, y + 88, W - 180);
-    boardRows.push({ y0: y, y1: y + 100, ev: r });
+  totem.draw((g, w, hh, card) => {
+    panel(g, w, hh, S.replay ? P.temporal : S.frozen ? P.major : '#3B434E'); g.textBaseline = 'alphabetic';
+    // en-tête : compteurs non pris en charge, bascule compact / détail
+    g.fillStyle = P.ink; g.font = `600 12px ${COND}`; g.letterSpacing = '3px'; g.fillText('PANNES', 14, 23); g.letterSpacing = '0px';
+    [1, 2].forEach((p, i) => { drawGlyph(g, p, 92 + i * 52, 18, 6); g.fillStyle = state.counters[p] ? P.ivory : P.ink; g.font = `500 16px ${MONO}`; g.fillText(String(state.counters[p]), 103 + i * 52, 24); });
+    g.fillStyle = P.ink; g.font = `400 11px ${SANS}`; g.fillText('non pris', 196, 23);
+    g.textAlign = 'right'; g.fillStyle = P.inkLight; g.font = `400 11.5px ${SANS}`; g.fillText(open ? '▴ réduire' : '▾ détail', w - 12, 23); g.textAlign = 'left';
+    card.hits.push({ x: 0, y: 0, w, h: TOTEM.head, action: 'totem:' });
+    g.fillStyle = '#2A313B'; g.fillRect(12, TOTEM.head - 2, w - 24, 1);
+    if (S.storm) { g.fillStyle = P.major; g.font = `600 11.5px ${SANS}`; g.fillText(`Tempête : ${S.storm.count} alarmes en ${Math.round(S.storm.window)} s · cause probable ${S.storm.cause}`, 14, TOTEM.head + 15, w - 28); }
+    rows.forEach((r, i) => {
+      const y = top + i * rowH;
+      const focus = i === S.boardFocus; const sel = S.focusEvent === r.id;
+      if (focus || sel) { g.fillStyle = '#1F252E'; g.fillRect(6, y, w - 12, rowH - 2); if (focus) { g.strokeStyle = P.ivory; g.lineWidth = 1.5; g.strokeRect(6.75, y + 0.75, w - 13.5, rowH - 3.5); } }
+      const blinking = r.prio === 1 && !r.ackNow && !S.replay && !S.storm;
+      const base = y + 19;
+      g.fillStyle = P.ink; g.font = `400 10.5px ${MONO}`; g.fillText(String(i + 1), 13, base);
+      drawGlyph(g, r.prio, 30, base - 4, 6, { ack: !!r.ackNow, dim: blinking && !blinkOn });
+      g.fillStyle = r.ackNow ? P.ink : P.ivory; g.font = `500 13px ${MONO}`; g.fillText(r.obj.startsWith('svc:') ? svcName(r.obj) : r.obj, 42, base, 104);
+      g.fillStyle = r.ackNow ? P.ink : P.inkLight; g.font = `400 12px ${SANS}`; g.fillText(r.title, 152, base, w - 152 - 70);
+      g.textAlign = 'right'; g.fillStyle = P.ink; g.font = `400 10.5px ${MONO}`; g.fillText(fmtAge(r.age), w - 12, base); g.textAlign = 'left';
+      if (open) { g.fillStyle = P.ink; g.font = `400 10.5px ${MONO}`; g.fillText(`${r.ackNow ? `pris : ${r.ackNow.by}` : 'non pris'}${r.children?.length ? ` · ${r.children.length} conséquences` : ''}`, 42, base + 16, w - 54); }
+      boardRows.push({ y0: y, y1: y + rowH, ev: r });
+      card.hits.push({ x: 6, y, w: w - 12, h: rowH - 2, action: `board:${i}` });
+    });
+    if (!rows.length) { g.fillStyle = P.ink; g.font = `400 12px ${SANS}`; g.fillText('Aucune panne P1 ou P2.', 14, top + 18); }
+    if (more > 0) { g.fillStyle = P.ink; g.font = `400 11px ${SANS}`; g.fillText(`+ ${more} autre${more > 1 ? 's' : ''}${open ? '' : ' · ▾ détail'}`, 14, hh - 8); }
   });
-  if (!list.length) { g.fillStyle = P.ink; g.font = `400 34px ${SANS}`; g.fillText('Aucune panne P1 ou P2.', 44, 180); }
 }
+
 
 // ============================================================ règle du temps au sol (relecture)
 const RULE = { x0: K.slab.x0 + 1.2, x1: K.slab.x1 - 0.5, y: -0.13, z: K.slab.z1 + 0.004, span: 86400 };
@@ -799,7 +813,7 @@ function contentPoints(e = S.explodeTarget, extra = []) {
   return pts.concat(extra);
 }
 /** Cadre une liste de points sans changer l'orientation, en réservant le bas de l'écran à la légende. */
-function framePoints(pts, { theta = view.theta, phi = view.phi, margin = 1.04, ms, padBottom = 76 * uiScale(), padLeft = (S.mur ? BOARD.px + 40 : 150) * uiScale() } = {}) {
+function framePoints(pts, { theta = view.theta, phi = view.phi, margin = 1.04, ms, padBottom = 76 * uiScale(), padLeft = (S.mur ? TOTEM.w + 40 : 150) * uiScale() } = {}) {
   const fwd = new THREE.Vector3(Math.cos(phi) * Math.sin(theta), Math.sin(phi), Math.cos(phi) * Math.cos(theta));
   const right = new THREE.Vector3(0, 1, 0).cross(fwd).normalize(); const up = fwd.clone().cross(right).normalize();
   let x0 = Infinity; let x1 = -Infinity; let y0 = Infinity; let y1 = -Infinity; const c3 = new THREE.Vector3();
@@ -861,7 +875,6 @@ function pick(e) {
   if (!hits.length) return null;
   const best = hits.find((h) => !racks.has(h.object.userData.id)) || hits[0];
   const id = best.object.userData.id;
-  if (id === 'board') { const py = (1 - best.uv.y) * BOARD.h; const row = boardRows.find((r) => py >= r.y0 && py <= r.y1); return { id: row ? row.ev.obj : null, board: row?.ev, point: best.point }; }
   return { id, point: best.point };
 }
 function pickPlaneZ(e, z) { ray.setFromCamera(ndc(e), camera); const pt = new THREE.Vector3(); return ray.ray.intersectPlane(new THREE.Plane(new THREE.Vector3(0, 0, 1), -z), pt) ? pt : null; }
@@ -928,7 +941,7 @@ function drawSelCard() {
     const r = th.racks[rackOf(id)];
     if (r?.flux && (S.climat || d?.kind === 'rack')) {
       facts.push(['Entrée b·m·h', `${r.inlet.map((v) => v.toFixed(1).replace('.', ',')).join(' · ')} °C`], ['Sortie', fmtT(r.outlet)]);
-      if (r.recirculation) facts.push(['Air', 'recirculation d’air chaud en haut']);
+      if (r.recirculation && th.fuite) facts.push(['Air', th.fuite.detail]);
     } }
   // état global de l'objet : ce que la scène encode, en toutes lettres
   const redo = gl(glob.redondance, id); if (redo) facts.push(['Redondance', `${redo.niveau} · ${redo.detail}`]);
@@ -1037,6 +1050,7 @@ function incidentBox(r) {
   return { b, w };
 }
 function frameIncident(r) {
+  if (S.climat) { home(); S.pendingFrame = null; return; }
   const { w } = incidentBox(r);
   framePoints(contentPoints(1, w ? [new THREE.Vector3(w.x, strataY('services', 1) + 1.1, w.z)] : []));
   S.pendingFrame = null;
@@ -1118,6 +1132,8 @@ function updateSvcLabels() {
 function runAction(a) {
   const i = a.indexOf(':'); const kind = a.slice(0, i); const arg = a.slice(i + 1);
   if (kind === 'sel') { select(arg === S.sel ? null : arg); return; }
+  if (kind === 'climat') { toggleClimat(true); return; }
+  if (kind === 'totem') { totemOpen = !totemOpen; drawBoard(); invalidate(); return; }
   if (kind === 'board') { const r = boardRows[Number(arg)]?.ev; if (r) focusEvent(r.id, { fromUser: true }); return; }
   if (kind === 'strate') { isolate(arg); return; }
   if (kind === 'open') { const r = state.roots.find((x) => x.id === arg); if (r) { focusEvent(r.id, { fromUser: true }); select(r.obj); } return; }
@@ -1367,6 +1383,9 @@ function toggleClimat(on = !S.climat, { frame = true } = {}) {
   if (on) { select(null); S.stratum = 'physique'; } else S.stratum = null;
   applyFocus();
   climat.setVisible(on, thermalAt(currentT()));
+  // salle dans la pénombre : l'air, lumineux, devient le sujet ; les alarmes (aplats non éclairés) gardent leur éclat
+  const k = on ? 0.5 : 1; hemi.intensity = LIGHTS.hemi * k; sun.intensity = LIGHTS.sun * (on ? 0.55 : 1); fillL.intensity = LIGHTS.fill * k;
+  climatTab.hidden = on || S.mur;
   for (const [rid, top] of margeRackTops) top.visible = !on && !!gl(glob.marge, rid);
   drawClimatCards(); drawLegend();
   if (frame) home();
@@ -1379,6 +1398,15 @@ function climatPoints() {
   for (const x of [K.room.x0, K.room.x1]) for (const z of [K.room.z0, K.room.z1]) pts.push(new THREE.Vector3(x, 2.85, z));
   return pts;
 }
+// onglet posé au-dessus des climatiseurs : l'entrée du calque est un objet de la salle, cliquable
+const climatTab = new Card({ w: 150, h: 30, anchor: () => { const a = K.clims[0]; return new THREE.Vector3(a.pos.x + 0.45, a.top, a.pos.z + 0.9); }, offset: [12, -6], prio: 3.8 });
+climatTab.noLeader = true;
+const drawClimatTab = () => climatTab.draw((g, w, h, card) => {
+  g.fillStyle = 'rgba(16,19,24,0.9)'; g.fillRect(0, 0, w, h); g.strokeStyle = P.ivory; g.lineWidth = 1.2; g.strokeRect(0.6, 0.6, w - 1.2, h - 1.2);
+  const gr = g.createLinearGradient(12, 0, 40, 0); gr.addColorStop(0, tempCss(18)); gr.addColorStop(1, tempCss(34)); g.fillStyle = gr; g.fillRect(12, 11, 26, 8);
+  g.fillStyle = P.ivory; g.font = `600 12px ${COND}`; g.letterSpacing = '2px'; g.fillText('VOIR L’AIR · C', 48, 20); g.letterSpacing = '0px';
+  card.hits.push({ x: 0, y: 0, w, h, action: 'climat:' });
+});
 // cartels du calque : climatiseurs, baies dont l'entrée haute dépasse 25 °C, allée chaude
 const climatCards = new Map();
 function drawClimatCards() {
@@ -1418,7 +1446,7 @@ function drawClimatCards() {
   }
 }
 function toggleMur() {
-  S.mur = !S.mur; select(null); S.stratum = S.climat ? 'physique' : null; applyFocus();
+  S.mur = !S.mur; select(null); S.stratum = S.climat ? 'physique' : null; applyFocus(); climatTab.hidden = S.climat || S.mur;
   if (S.mur) { S.explodeTarget = 0.85; anim = null; canvas.style.cursor = 'default'; }
   home(0); update(true);
   announce(S.mur ? 'Mode mur : caméra fixe, aucune animation.' : 'Mode poste.');
@@ -1504,7 +1532,7 @@ setInterval(() => { if (S.replay?.playing) return; if (!S.frozen) dataAge = data
 
 // ============================================================ démarrage
 for (const s of STRATA.slice(1)) layers[s.id].group.position.y = strataY(s.id);
-placePosts(); drawStrataTabs();
+placePosts(); drawStrataTabs(); drawClimatTab();
 resize();
 layoutVms();
 buildServices();
@@ -1516,5 +1544,5 @@ home(0);
 applyCamera();
 requestAnimationFrame(tick);
 // la panne en cours est présentée à l'ouverture : la scène se meut vers elle sans perdre la salle
-setTimeout(() => checkNewIncidents(), 900);
-window.__spatial = { S, view, invalidate, get frames() { return frames; }, get particles() { return climat.particleCount; }, focusEvent, select, isolate, toggleStorm, toggleFreeze, toggleMur, toggleClimat };
+setTimeout(() => { checkNewIncidents(); if (location.hash === '#climat') toggleClimat(true); }, 900);
+window.__spatial = { S, view, invalidate, pickAt: (x, y) => { const h = pick({ clientX: x, clientY: y }); return h && { id: h.id, action: h.action }; }, get frames() { return frames; }, get particles() { return climat.particleCount; }, focusEvent, select, isolate, toggleStorm, toggleFreeze, toggleMur, toggleClimat };

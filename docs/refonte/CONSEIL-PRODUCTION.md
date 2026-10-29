@@ -139,7 +139,8 @@ les compteurs « non pris ».
 | Un faisceau rouge du sol au ciel colorait la strate réseau, hors de cause | Traçage ivoire fin ; le rouge reste sur l'équipement fautif |
 | Cartels superposés : « Prendre en charge » était masqué | Un seul cartel ouvert à la fois ; les autres deviennent des épingles numérotées ; anti-chevauchement |
 | « Prendre en charge » proposé sur le CRM, simple conséquence | On prend en charge la cause ; une conséquence propose « Ouvrir la cause » |
-| Totem incliné, texte d'environ 7 px, P3 compris | Totem opaque, face caméra, 5 lignes P1 et P2, numérotées comme les épingles |
+| Totem incliné, texte d'environ 7 px, P3 compris | Totem opaque, face caméra, P1 et P2 seulement, numérotées comme les épingles |
+| Le panneau des pannes prend trop de place (demande du client) | Panneau compact de 360 px : une ligne par panne, 4 lignes au plus et « + n autres » ; un clic sur l'en-tête déplie le détail (6 lignes, prise en charge, conséquences) |
 | Quatre plans translucides empilés faisaient du moiré sur les baies | Strates en filets de contour, objets opaques |
 | lic-par-01 en ambre plein | Hachuré : perte de supervision = inconnu |
 | Strate services minuscule | Plaques plus grandes ; cartel formulé en usagers (« CRM : 100 % des connexions en échec ») |
@@ -227,6 +228,7 @@ Captures :
 - ![Moteur muet : toute la salle hachurée, heure figée en ambre](maquettes/13-spatial-donnees-figees.jpg)
 - ![Mode mur : caméra fixe, texte agrandi pour une lecture à 4 m](maquettes/14-spatial-mur.jpg)
 - ![Calque climat : carte thermique, façades par sonde d'entrée, courants d'air jusqu'aux climatiseurs](maquettes/15-spatial-climat.jpg)
+- ![Calque climat, gros plan : air froid montant des dalles, air chaud dans l'allée chaude, fuite par le haut d'A04](maquettes/16-spatial-climat-fuite-a04.jpg)
 
 Les captures sont faites avec un rendu logiciel : le lissage des traits est meilleur sur un vrai poste.
 
@@ -235,7 +237,9 @@ Les captures sont faites avec un rendu logiciel : le lissage des traits est meil
 Le client a demandé une visualisation des courants d'air et une colorimétrie selon la température. Les deux
 contredisent la grammaire du conseil si elles restent affichées en permanence. La teinte n'y dit que la
 sévérité, et aucun mouvement de routine n'y est admis. Elles forment donc un **calque**, ouvert à la demande
-(touche C ou clic sur un climatiseur) et refermé par C ou Échap.
+et refermé par C ou Échap. On l'ouvre de trois façons : l'onglet « VOIR L'AIR » posé à côté des
+climatiseurs, la touche C, ou le lien direct `/refonte/spatial/#climat`. Un clic sur un climatiseur
+l'ouvre aussi.
 
 Dans ce calque :
 
@@ -246,13 +250,20 @@ Dans ce calque :
   recommandée ASHRAE A1) en trait clair doublent la teinte pour une lecture en niveaux de gris.
 - **Façades** : chaque baie est colorée par ses trois sondes d'entrée (bas, milieu, haut). Les équipements et
   leurs contours d'état restent devant.
-- **Allée chaude** : le vitrage du confinement prend la couleur de sa température.
-- **Courants d'air** : des particules à traînée suivent le circuit. Elles montent des dalles perforées,
-  traversent les baies, rejoignent l'allée chaude, passent par la reprise au plafond et retournent aux
-  climatiseurs. Les courants de CLIM 2, en dégivrage, sont moins nombreux et plus lents.
-- **Recirculation** : de l'air chaud échappé par la porte de l'allée chaude redescend dans le haut d'A03,
-  A04 et A05. Il explique l'alarme A04 (28,4 °C en entrée haute, prise en charge par l'astreinte avec le
-  commentaire « CLIM 2 en dégivrage »).
+- **Zones fermées** : les deux allées froides sont confinées (toit, paroi, portes), comme l'allée chaude.
+  Une gaine de reprise fermée relie le toit de l'allée chaude au sommet des deux climatiseurs. Chaque
+  vitrage prend la couleur de l'air qu'il contient.
+- **Courants d'air en circuit fermé** : l'air froid monte des dalles perforées dans les allées froides,
+  traverse les baies et ressort chaud dans l'allée chaude. Il remonte ensuite dans la gaine et rejoint le
+  sommet des climatiseurs. Les particules sont des comètes lumineuses : tête claire, traînée de 14 points
+  qui s'amincit, fusion additive (les courants qui se croisent s'éclairent), légère turbulence. La salle
+  passe dans la pénombre pour que l'air devienne le sujet. Les courants de CLIM 2, en dégivrage, sont moins
+  nombreux et plus lents.
+- **Fuite d'A04** : les zones étant fermées, l'air chaud ne peut plus contourner les rangées. Il repasse à
+  travers A04, par les U30 à U33 restés sans obturateur, et remonte dans l'aspiration des équipements du
+  haut. C'est la cause de l'alarme A04 (28,4 °C en entrée haute, prise en charge par l'astreinte avec le
+  commentaire « CLIM 2 en dégivrage »). Le dégivrage baisse la pression dans l'allée froide et rend la
+  fuite active.
 - **Cartels** : soufflage, reprise, débit et état de chaque climatiseur ; baies dont l'entrée haute dépasse
   25 °C ; température de l'allée chaude. Un clic sur une baie donne ses trois sondes et sa sortie.
 
@@ -264,8 +275,8 @@ Ce qui ne change pas :
 - Au mur, en mouvement réduit ou quand les données sont figées, les particules s'immobilisent ; les lignes
   de courant restent.
 
-Le modèle thermique de la démo est schématique : faux plancher soufflé, allées froides ouvertes, allée
-chaude confinée avec reprise au plafond, charge estimée par type d'équipement. En production, il serait
+Le modèle thermique de la démo est schématique : faux plancher soufflé, allées froides et allée chaude
+confinées, reprise par gaine fermée, charge estimée par type d'équipement. En production, il serait
 alimenté par les sondes de baie (trois par face avant, en SNMP ou Redfish) et par les climatiseurs (Modbus
 ou BACnet).
 

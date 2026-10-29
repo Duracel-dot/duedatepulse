@@ -9,3 +9,5 @@ body { font: 14px 'IBM Plex Sans', 'Segoe UI', system-ui, sans-serif; color: var
 #scene:focus-visible { box-shadow: inset 0 0 0 2px var(--ivory); }
 .sr-only { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
 .fallback { position: absolute; inset: 0; display: grid; place-items: center; margin: 0; padding: 24px; color: var(--ink); text-align: center; }
+/* sans cette règle, le paragraphe vide (display: grid l'emporte sur l'attribut hidden) recouvre la scène et bloque tous les clics */
+[hidden] { display: none !important; }
